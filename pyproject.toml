@@ -57,6 +57,7 @@ members = [
   "src/tools",
   "src/driver",
   "src/trafficsim",
+  "src/lidar_perception",
   "plugins/*",
 ]
 
@@ -74,6 +75,7 @@ alpasim_transfuser = { workspace = true }
 alpasim_wizard = { workspace = true }
 trajdata-alpasim = { git = "https://github.com/NVlabs/trajdata", rev = "a0c1310c5fba190c181c6fb4f00c06fc5c77b417" }
 alpasim-trafficsim = { workspace = true }
+physical-ai-av-lidar = { workspace = true }
 
 [tool.uv]
 python-preference = "only-managed"

@@ -1,0 +1,139 @@
+# AlpaSim End-to-End Rollout Troubleshooting & Verification Log
+
+**Target:** Execute closed-loop simulation rollouts on Pittsburgh Supercomputing Center (PSC) Bridges-2 (`GPU-shared` partition, V100 GPU) using AlpaSim, VaVAM driver, and NRE renderer (`pycena_nrm_full`).  
+**Cluster Path:** `/ocean/projects/cis260312p/mcropper/Documents/alpasim`  
+**Execution Interface:** SLURM batch (`run_vavam.sbatch`) wrapping Singularity containers and host Python orchestrator (`alpasim_runtime.simulate`).
+
+---
+
+## 1. System Architecture & Service Topology
+
+| Subsystem | Execution Model | gRPC Port | Primary Artifact / Checkpoint |
+|---|---|---|---|
+| **VaVAM Driver** | Singularity Container (`driver-vavam`) | `6005` | `VAM_width_1024_pretrained_139k.pt` |
+| **NRE Renderer** | Singularity Container (`pycena_nrm_full`) | `6006` | Trained 3D Gaussian Splatting scene (`.usdz`) |
+| **Physics Engine** | Singularity Container (`physics`) | `6007` | Internal scenario dynamics / kinematic rig |
+| **Controller** | Singularity Container (`controller`) | `6008` | Trajectory follower & PID controller |
+| **Runtime Orchestrator** | Bridges-2 Host (`uv run alpasim_runtime`) | Client | `generated-user-config-0.yaml` |
+
+---
+
+## 2. Issues Encountered & Resolution History
+
+### Phase 1: gRPC Service Probing & Communication Handshakes
+- **Behavior:** Services intermittently refused connection or failed early health checks.
+- **Root Cause:** Container startup latency and port binding race conditions across parallel Singularity instances.
+- **Resolution:** Added loopback wait-for-port logic with `nc -z localhost <port>` before initiating the runtime daemon. All 4 services successfully bind and report active versions:
+  - Driver (`localhost:6005`): `vam-driver-0.91.0`
+  - Renderer (`localhost:6006`): `26.4.149`
+  - Physics (`localhost:6007`): `0.2.0`
+  - Controller (`localhost:6008`): `0.89.0`
+
+---
+
+### Phase 2: Scene Discovery Path Divergence
+- **Symptom:**
+  ```text
+  Discovered 0 USDZ scenes from /mnt/nre-data/**/*.usdz
+  Registered 0 scenes via ArtifactSceneProvider
+  alpasim_runtime.errors.UnknownSceneError: No data source found for scene_id: clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e
+Root Cause: The wizard configured scene_provider.usdz.data_dir to /mnt/nre-data, which exists solely inside the Singularity mount namespace, but the discovery engine runs directly on the Bridges-2 host.
+
+Resolution: Updated data_dir in generated-user-config-0.yaml to point explicitly to the host Lustre path:
+/ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage.
+
+Phase 3: Recursive Glob Artifact Collision
+Symptom:
+
+Plaintext
+AssertionError: Duplicate scene IDs found. Duplicates (scene_id: artifact paths): 
+{"clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e": [
+  ".../data/nre-artifacts/9c264c49-82a8-4344-ada1-d93791120c27.usdz",
+  ".../data/nre-artifacts/single-scene-stage/9c264c49-82a8-4344-ada1-d93791120c27.usdz"
+]}
+Root Cause: ArtifactSceneProvider scans recursively (**/*.usdz). Staging the file in both root nre-artifacts/ and subfolder single-scene-stage/ registered duplicate scene_id entries.
+
+Resolution: Purged root artifacts (rm -f data/nre-artifacts/*.usdz) and isolated staging exclusively to data/nre-artifacts/single-scene-stage/.
+
+Phase 4: Scenario Metadata & Schema Deficiencies in Synthetic Artifacts
+Symptom 4A (parsed_config.yaml missing):
+
+Plaintext
+details = "Exception calling application: There is no item named 'parsed_config.yaml' in the archive"
+Fix: Unpacked test archive and injected parsed_config.yaml.
+
+Symptom 4B (Missing key system schema error):
+
+Plaintext
+details = "Exception calling application: Missing key system
+    full_key: system
+    object_type=dict"
+Fix: Replaced partial YAML with the complete scenario configuration containing the top-level system: block (coordinate reference frames, sensor rigs, and collector configurations).
+
+Symptom 4C (datasource_summary.json missing):
+
+Plaintext
+details = "Exception calling application: There is no item named 'datasource_summary.json' in the archive"
+Fix: Integrated datasource_summary.json (timing bounds, sensor channels, coordinate bounds) extracted from reference artifact src/utils/tests/data/xodr_artifact/026d6a39-bd8f-4175-bc61-fe50ed0403a3.usdz.
+
+Phase 5: NRE Neural Field / Checkpoint Requirement
+Symptom 5A (checkpoint.ckpt missing):
+
+Plaintext
+details = "Exception calling application: There is no item named 'checkpoint.ckpt' in the archive"
+Symptom 5B (Empty dummy state dict rejected):
+
+Plaintext
+details = "Exception calling application: Error(s) in loading state_dict for GaussiansComposite:
+Missing key(s) in state_dict: _extra_state, background.textures, gaussians_nodes.background.positions, gaussians_nodes.road.positions, ...
+Symptom 5C (Outdated mock schema missing layers):
+
+Plaintext
+details = "Exception calling application: Missing key layers
+    full_key: model.layers
+    object_type=dict"
+Root Cause: The test archives bundled within src/runtime/tests/data/mock/ and src/utils/tests/ are test stubs (HD maps, road networks, boundary meshes) lacking trained neural reconstruction weights. The NRE rasterizer strictly requires learned 3D Gaussian Splatting parameters (GaussiansComposite state tensors) to synthesize camera frames for the VaVAM driver.
+
+3. Current Working State
+[x] Slurm job allocation on GPU-shared (PSC Bridges-2).
+
+[x] Singularity container orchestration (Driver, NRE Renderer, Physics, Controller).
+
+[x] All 4 gRPC service handshakes and version checks verified.
+
+[x] Host path discovery for ArtifactSceneProvider verified.
+
+[x] Duplicate scene collision eliminated.
+
+[ ] Active blocker: Execution requires an authentic, fully trained evaluation scene archive containing the checkpoint.ckpt state dictionary and modern model.layers specification.
+
+4. Immediate Concrete Next Steps
+Pre-Download Authentic Evaluation Scene on Login Node:
+Compute nodes lack outbound internet. Download target scene (clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6) directly on bridges2-login013:
+
+Bash
+cd /ocean/projects/cis260312p/mcropper/Documents/alpasim
+mkdir -p data/nre-artifacts/scenes
+uv run huggingface-cli download \
+    nvidia/alpasim-eval-scenes \
+    clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6.usdz \
+    --local-dir data/nre-artifacts/scenes \
+    --local-dir-use-symlinks False
+Generate User Config via Wizard:
+
+Bash
+uv run alpasim_wizard \
+    deploy=local \
+    topology=1gpu \
+    driver=vavam \
+    wizard.log_dir=$PWD/tutorial_2 \
+    scenes.scene_ids=['clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6'] \
+    scenes.local_usdz_dir=$PWD/data/nre-artifacts/scenes
+Verify Host Discovery Path:
+Ensure tutorial_2/generated-user-config-0.yaml has data_dir pointing to /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/scenes (not /mnt/nre-data).
+
+Submit Batch Rollout:
+
+Bash
+sbatch run_vavam.sbatch
+tail --retry -f vavam_*.err

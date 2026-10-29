@@ -18,7 +18,9 @@ def _identity_matrix() -> list[list[float]]:
     ]
 
 
-def _rig_json(cameras_frame_timestamps_us: dict | None) -> str:
+def _rig_json(
+    cameras_frame_timestamps_us: dict | None, lidar_calibrations: dict | None = None
+) -> str:
     trajectory = {
         "sequence_id": "clipgt-test",
         "T_rig_world_timestamps_us": [1_000, 2_000],
@@ -36,6 +38,11 @@ def _rig_json(cameras_frame_timestamps_us: dict | None) -> str:
                 "unique-left": {"logical_sensor_name": "camera_left"},
             },
             "rig_trajectories": [trajectory],
+            **(
+                {"lidar_calibrations": lidar_calibrations}
+                if lidar_calibrations is not None
+                else {}
+            ),
         }
     )
 
@@ -156,3 +163,48 @@ def test_simulation_start_rejects_configured_camera_without_timestamps() -> None
 
     with pytest.raises(ValueError, match="has no frame timestamps"):
         rig.first_camera_frame_ranges_us(["camera_left"])
+
+
+def _lidar_calibration(sequence_id: str, name: str) -> dict:
+    T_sensor_rig = _identity_matrix()
+    T_sensor_rig[0][3], T_sensor_rig[2][3] = 1.17, 1.93
+    return {
+        "sequence_id": sequence_id,
+        "logical_sensor_name": name,
+        "T_sensor_rig": T_sensor_rig,
+    }
+
+
+_FRAMES = {"unique-front": [[-1, 1_200]], "unique-left": [[-1, 1_100]]}
+
+
+def test_rig_loads_lidar_mount() -> None:
+    (rig,) = Rig.load_from_json(
+        _rig_json(
+            _FRAMES,
+            {"top@clipgt-test": _lidar_calibration("clipgt-test", "lidar_top")},
+        )
+    )
+
+    assert rig.rig_to_lidar is not None
+    assert rig.rig_to_lidar.vec3.tolist() == pytest.approx([1.17, 0.0, 1.93])
+    assert rig.clip_start(100).rig_to_lidar is rig.rig_to_lidar
+
+
+def test_rig_without_lidar_calibration_has_no_mount() -> None:
+    (rig,) = Rig.load_from_json(_rig_json(_FRAMES))
+
+    assert rig.rig_to_lidar is None
+
+
+def test_rig_rejects_ambiguous_lidar() -> None:
+    with pytest.raises(ValueError, match="several LiDARs"):
+        Rig.load_from_json(
+            _rig_json(
+                _FRAMES,
+                {
+                    "a": _lidar_calibration("clipgt-test", "lidar_top"),
+                    "b": _lidar_calibration("clipgt-test", "lidar_front"),
+                },
+            )
+        )

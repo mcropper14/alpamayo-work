@@ -18,13 +18,16 @@ from alpasim_grpc.v0.egodriver_pb2 import Route
 from alpasim_utils.geometry import Pose, Trajectory
 from scipy.interpolate import interp1d
 
+from ..latency import StageRecorder
 from ..schema import ModelConfig
+from ..visual_cache import CachedImageEncoder, install_visual_cache
 from .base import (
     BaseTrajectoryModel,
     CameraImages,
     DriveCommand,
     ModelInputValidationError,
     ModelPrediction,
+    NonFiniteModelOutputError,
     PredictionInput,
 )
 from .nav_text import route_to_nav_text
@@ -49,6 +52,11 @@ CAMERA_NAME_TO_INDEX = {
     "camera_rear_right_70fov": 5,
     "camera_front_tele_30fov": 6,
 }
+
+
+def _raise_if_nonfinite(stage: str, values: torch.Tensor) -> None:
+    if not torch.isfinite(values).all():
+        raise NonFiniteModelOutputError(f"{stage} produced NaN or inf values")
 
 
 def configure_deterministic_runtime() -> None:
@@ -415,6 +423,7 @@ class AlpamayoBaseModel(BaseTrajectoryModel):
             )
 
         self._model = model
+        self._visual_cache: CachedImageEncoder | None = None
         self._processor = processor
         self._helper = helper_module
         self._device = device
@@ -471,6 +480,40 @@ class AlpamayoBaseModel(BaseTrajectoryModel):
     # BaseTrajectoryModel interface
     # ------------------------------------------------------------------
 
+    def install_nonfinite_checks(self) -> None:
+        """Raise :class:`NonFiniteModelOutputError` naming the first bad stage.
+
+        Without these checks NaN logits reach ``torch.multinomial``, whose
+        device-side assert breaks the CUDA context for every later request.
+        """
+        vlm = self._model.vlm
+        vlm.model.visual.register_forward_hook(
+            lambda _module, _args, output: _raise_if_nonfinite(
+                "Vision encoder", output[0]
+            )
+        )
+        vlm.register_forward_hook(
+            lambda _module, _args, output: _raise_if_nonfinite(
+                "VLM logits", output.logits
+            )
+        )
+
+    def install_stage_timing(self, recorder: StageRecorder) -> None:
+        """Timestamp the vision encoder and every VLM forward pass.
+
+        ``generate`` runs one VLM forward for the prefill (which calls the
+        vision encoder) and one per chain-of-thought token; the diffusion
+        trajectory sampling follows the last VLM forward.
+        """
+        vlm = self._model.vlm
+        vlm.register_forward_pre_hook(lambda *_: recorder.vlm_started())
+        vlm.register_forward_hook(lambda *_: recorder.vlm_finished())
+        visual = vlm.model.visual
+        visual.register_forward_pre_hook(lambda *_: recorder.vision_started())
+        visual.register_forward_hook(lambda *_: recorder.vision_finished())
+        if self._visual_cache is not None:
+            self._visual_cache.on_call = recorder.add_counters
+
     @classmethod
     def from_config(
         cls,
@@ -495,7 +538,7 @@ class AlpamayoBaseModel(BaseTrajectoryModel):
             )
 
         selection = model_cfg.trajectory_selection
-        return cls(
+        model = cls(
             checkpoint_path=model_cfg.checkpoint_path,
             device=device,
             camera_ids=camera_ids,
@@ -507,6 +550,13 @@ class AlpamayoBaseModel(BaseTrajectoryModel):
             skip_first_n_distance_points=selection.skip_first_n_distance_points,
             **cls._variant_init_kwargs(model_cfg),
         )
+        model.install_nonfinite_checks()
+        if model_cfg.visual_cache.enabled:
+            model._visual_cache = install_visual_cache(
+                model._model.vlm.model, model_cfg.visual_cache
+            )
+            logger.info("Visual feature cache enabled: %s", model_cfg.visual_cache)
+        return model
 
     @classmethod
     def _variant_init_kwargs(cls, model_cfg: ModelConfig) -> dict[str, Any]:
@@ -695,6 +745,9 @@ class AlpamayoBaseModel(BaseTrajectoryModel):
         with torch.no_grad():
             with torch.autocast(str(self._device.type), dtype=self.DTYPE):
                 pred_xyz, pred_rot, extra = self._run_inference(model_inputs, nav_text)
+
+        _raise_if_nonfinite("Trajectory sampling", pred_xyz)
+        _raise_if_nonfinite("Trajectory sampling", pred_rot)
 
         # Sampled candidates in the rig frame at t0, shapes
         # [batch=1, num_traj_sets=1, K, T, ...] -> (K, T, ...).

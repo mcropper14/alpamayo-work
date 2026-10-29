@@ -1,0 +1,77 @@
+enabled: true
+allow_aggregation_with_failed_rollouts: false
+parse_unstructured_debug_info: true
+vec_map:
+  incl_road_edges: true
+  incl_traffic_signs: true
+  incl_wait_lines: true
+  max_num_lanes: 20
+  num_pts_per_lane: 20
+num_processes: 16
+vehicle:
+  vehicle_corner_roundness: 0.5
+  vehicle_shrink_factor: 0.02
+scorers:
+  min_ade:
+    time_deltas:
+      - 0.5
+      - 1.0
+      - 2.5
+      - 5.0
+    incl_z: false
+    target: GT
+  plan_deviation:
+    incl_z: false
+    avg_decay_rate: 0.1
+    min_timesteps: 5
+  image:
+    camera_logical_id: camera_front_wide_120fov
+  open_loop_collision:
+    horizon_s: 3.0
+aggregation_modifiers:
+  max_dist_to_gt_trajectory: 4.0
+scene_score:
+  enabled: true
+  progress_saturation_threshold: 0.8
+  min_gt_distance_for_full_score_m: 5.0
+video:
+  render_video: true
+  video_layouts:
+    - DEFAULT
+  camera_id_to_render: camera_front_wide_120fov
+  reasoning_text_refresh_interval_s: 1.0
+  overlay_plans_on_camera: true
+  render_every_nth_frame: 1
+  generate_combined_video: false
+  combined_video_speed_factor: 0.33
+  metrics_table_entries:
+    - offroad_or_collision_at_fault
+    - collision_any
+    - collision_at_fault
+    - collision_front
+    - collision_lateral
+    - collision_rear
+    - offroad
+    - dist_to_gt_trajectory
+    - dist_to_gt_location
+    - progress
+    - progress_rel_to_total
+    - progress_rel
+    - safety_monitor_triggered
+  map_video:
+    map_radius_m: 20
+    ego_loc: BOTTOM_CENTER
+    rotate_map_to_ego: true
+    map_elements_to_plot:
+      - ROAD_LANE_CENTER
+      - ROAD_LANE_LEFT_EDGE
+      - ROAD_LANE_RIGHT_EDGE
+      - ROAD_EDGE
+      - STOP_LINE
+      - GT_LINESTRING
+      - EGO_GT_GHOST_POLYGON
+      - DRIVER_RESPONSES
+      - ROUTE
+      - AGENTS
+      - AGENT_IDS
+      - TRAFFIC_PREDICTIONS

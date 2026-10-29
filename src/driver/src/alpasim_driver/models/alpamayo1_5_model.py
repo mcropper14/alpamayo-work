@@ -5,12 +5,16 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from typing import Any
 
 import torch
 from alpamayo1_5 import helper
+from alpamayo1_5.config import Alpamayo1_5Config
 from alpamayo1_5.models.alpamayo1_5 import Alpamayo1_5
+from transformers.utils import cached_file
 
 from ..schema import ModelConfig
 from .alpamayo_base import (
@@ -22,6 +26,31 @@ from .trajectory_selection import TrajectorySelectionStrategy
 
 logger = logging.getLogger(__name__)
 _ATTN_IMPLEMENTATION = "sdpa"
+
+
+def load_checkpoint_config(
+    checkpoint_path: str, attn_implementation: str
+) -> Alpamayo1_5Config:
+    """Load an Alpamayo 1.5 config, resolving a VLM bundled with the checkpoint.
+
+    ``attn_implementation`` replaces the checkpoint's own setting
+    (``flash_attention_2`` in the released checkpoints), which the config uses
+    when it builds the VLM.
+
+    ``vlm_name_or_path`` names the VLM whose processor and config the model is
+    built from.  Hub IDs (``org/name``) are used as is.  Distilled checkpoints
+    such as SIMFORGE-D1.5 ship the VLM files in a subfolder of the checkpoint
+    and set a bare folder name (``"vlm"``), which ``from_pretrained`` would
+    otherwise look up relative to the working directory.
+    """
+    with open(cached_file(checkpoint_path, "config.json"), encoding="utf-8") as f:
+        config_dict = json.load(f)
+    vlm = config_dict["vlm_name_or_path"]
+    if "/" not in vlm:
+        vlm_config = cached_file(checkpoint_path, f"{vlm}/config.json")
+        config_dict["vlm_name_or_path"] = os.path.dirname(vlm_config)
+    config_dict["attn_implementation"] = attn_implementation
+    return Alpamayo1_5Config(**config_dict)
 
 
 class Alpamayo15Model(AlpamayoBaseModel):
@@ -85,6 +114,7 @@ class Alpamayo15Model(AlpamayoBaseModel):
 
         model = Alpamayo1_5.from_pretrained(
             checkpoint_path,
+            config=load_checkpoint_config(checkpoint_path, _ATTN_IMPLEMENTATION),
             dtype=self.DTYPE,
             attn_implementation=_ATTN_IMPLEMENTATION,
         ).to(device)

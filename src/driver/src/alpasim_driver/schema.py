@@ -25,6 +25,25 @@ class TrajectorySelectionConfig:
 
 
 @dataclass
+class VisualCacheConfig:
+    """Reuse of vision-encoder outputs across frames (Qwen3-VL Alpamayo models).
+
+    See ``alpasim_driver.visual_cache`` for the strategies.
+    """
+
+    enabled: bool = False
+    # Cached images; must cover cameras x context frames x interleaved rollouts.
+    max_entries: int = 64
+    strategy: str = "exact"  # exact | near_duplicate
+    # near_duplicate only: largest mean absolute difference of normalized
+    # pixels (Qwen3-VL normalizes to [-1, 1]) for which features are reused.
+    near_duplicate_threshold: float = 0.02
+    # near_duplicate only: other frames one encoded frame may serve before the
+    # encoder must run again.
+    max_near_duplicate_uses: int = 2
+
+
+@dataclass
 class ModelConfig:
     """Unified model configuration for all model types.
 
@@ -59,6 +78,7 @@ class ModelConfig:
     trajectory_selection: TrajectorySelectionConfig = field(
         default_factory=TrajectorySelectionConfig
     )
+    visual_cache: VisualCacheConfig = field(default_factory=VisualCacheConfig)
 
 
 @dataclass
@@ -118,6 +138,38 @@ class TrajectoryOptimizerConfig:
 
 
 @dataclass
+class SafetyValidatorConfig:
+    """LiDAR/radar safety filter over the sampled trajectory candidates.
+
+    Requires the runtime to forward LiDAR spins
+    (``runtime.simulation_config.render_lidar_for_driver``), radar scans
+    (``runtime.simulation_config.radars``), or both; see
+    ``alpasim_driver.safety_filter``.  It can only switch between candidates
+    when ``model.num_trajectory_samples > 1``; otherwise it only slows down.
+    """
+
+    enabled: bool = False
+    lane_half_width: float = 2.5  # m, path corridor half-width
+    prediction_horizon: float = 60.0  # m, max forward distance considered
+    reaction_time: float = 0.5  # s, delay before braking begins
+    max_decel: float = 6.0  # m/s^2
+    min_ttc: float = 2.0  # s, LOW_TTC threshold
+    emergency_ttc: float = 1.0  # s, emergency-brake threshold
+    safety_buffer: float = 2.0  # m, margin beyond the stopping distance
+    min_confidence: float = 0.1  # detections below this are ignored
+    steering_path_gain: float = 12.0  # path curvature sensitivity
+    confidence_weight_power: float = 2.0  # confidence -> risk weight exponent
+    rear_min_ttc: float = 2.0  # s
+    rear_emergency_ttc: float = 0.8  # s
+    rear_prediction_horizon: float = 30.0  # m behind ego
+    lidar_min_range_m: float = 2.0  # closer returns are ego self-hits
+    lidar_max_range_m: float = 80.0
+    # Radar fusion (``runtime.simulation_config.radars``); see radar_fusion.
+    radar_association_gate_m: float = 2.0  # radar <-> LiDAR obstacle distance
+    radar_only_confidence: float = 0.5  # obstacles no LiDAR detection explains
+
+
+@dataclass
 class RectificationTargetConfig:
     """Target pinhole parameters for rectifying a rendered camera."""
 
@@ -155,6 +207,10 @@ class DriverConfig:
 
     trajectory_optimizer: TrajectoryOptimizerConfig = field(
         default_factory=TrajectoryOptimizerConfig
+    )
+
+    safety_validator: SafetyValidatorConfig = field(
+        default_factory=SafetyValidatorConfig
     )
 
     # Output configuration

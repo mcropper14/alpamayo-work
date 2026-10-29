@@ -60,6 +60,9 @@ class MinADEScorer(Scorer):
             )
             if driver_response_at_time is None:
                 continue
+            # Skip if no sampled trajectories are available
+            if len(driver_response_at_time.sampled_trajectories) == 0:
+                continue
             ts_idx = int(np.searchsorted(simulation_result.timestamps_us, ts))
 
             # Index into the resulting ade array created at current time.
@@ -72,9 +75,15 @@ class MinADEScorer(Scorer):
                     for delta in self.time_deltas
                 ]
             )
-            # Max timestamp for which we need to query the ground truth trajectory
+            # Max timestamp for which we need to query the ground truth trajectory,
+            # limited by the simulation end and the shortest sampled plan horizon.
             max_ts = min(
-                ts + max(self.time_deltas) * 1e6, simulation_result.timestamps_us[-1]
+                ts + max(self.time_deltas) * 1e6,
+                simulation_result.timestamps_us[-1],
+                min(
+                    sampled_trajectory.timestamps_us[-1]
+                    for sampled_trajectory in driver_response_at_time.sampled_trajectories
+                ),
             )
             # Filter timestamps to be in relevant range. Note that we exclude
             # the current timestamp and start at the query time.
@@ -100,10 +109,6 @@ class MinADEScorer(Scorer):
                 )
             else:
                 raise NotImplementedError(f"Invalid target: {self.target}")
-
-            # Skip if no sampled trajectories are available
-            if len(driver_response_at_time.sampled_trajectories) == 0:
-                continue
 
             relevant_sampled_trajectory_waypoints = np.array(
                 [
@@ -135,8 +140,8 @@ class MinADEScorer(Scorer):
             # [T]
             cumulative_avg_min_over_samples = np.min(cumulative_avg, axis=0)
 
-            # At the end of the trajectory, we don't have the full gt anymore,
-            # need to shorted the minADE computation.
+            # At the end of the simulation or plan horizon, we don't have the full
+            # trajectory anymore, need to shorten the minADE computation.
             ade_timestamps_idx_delta = ade_timestamps_idx_delta[
                 ade_timestamps_idx_delta < cumulative_avg.shape[1]
             ]

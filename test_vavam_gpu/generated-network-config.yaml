@@ -1,0 +1,18 @@
+driver:
+  endpoints:
+    - address: localhost:6005
+      managed: true
+physics:
+  endpoints:
+    - address: localhost:6007
+      managed: true
+renderer:
+  endpoints:
+    - address: localhost:6006
+      managed: true
+trafficsim:
+  endpoints: []
+controller:
+  endpoints:
+    - address: localhost:6008
+      managed: true

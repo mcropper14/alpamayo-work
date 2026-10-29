@@ -78,9 +78,6 @@ def _format_trajs(trajs: torch.Tensor) -> np.ndarray:
 class VAMModel(BaseTrajectoryModel):
     """VAM wrapper implementing the common interface."""
 
-    # VAM uses float16 for inference; float32 on ARM (torch.amp.autocast on aarch64
-    # doesn't auto-cast Float32 weights in F.linear — fails across PyTorch versions)
-    DTYPE = torch.float32 if platform.machine() == "aarch64" else torch.float16
     # VAM only supports single camera
     NUM_CAMERAS = 1
     # NeuroNCAPTransform expects 900x1600 input
@@ -137,7 +134,11 @@ class VAMModel(BaseTrajectoryModel):
         self._camera_ids = camera_ids
         self._context_length = context_length
         self._preproc_pipeline = NeuroNCAPTransform()
+        # VAM runs float16 under CUDA autocast.  Elsewhere the float32 weights
+        # are used as-is, so its sampling noise must be float32 too (autocast on
+        # aarch64 doesn't cast float32 weights in F.linear across PyTorch versions).
         self._use_autocast = device.type == "cuda" and platform.machine() != "aarch64"
+        self._dtype = torch.float16 if self._use_autocast else torch.float32
 
     @property
     def camera_ids(self) -> list[str]:
@@ -195,7 +196,7 @@ class VAMModel(BaseTrajectoryModel):
         """
         batch_tensor = self._preprocess_batch(images).to(self._device)
         autocast_ctx = (
-            torch.amp.autocast(self._device.type, dtype=self.DTYPE)
+            torch.amp.autocast(self._device.type, dtype=self._dtype)
             if self._use_autocast
             else nullcontext()
         )
@@ -262,13 +263,13 @@ class VAMModel(BaseTrajectoryModel):
 
         # --- Single VAM forward pass ---
         autocast_ctx = (
-            torch.amp.autocast(self._device.type, dtype=self.DTYPE)
+            torch.amp.autocast(self._device.type, dtype=self._dtype)
             if self._use_autocast
             else nullcontext()
         )
         with torch.no_grad():
             with autocast_ctx:
-                trajectories = self._vam(batched_tokens, batched_commands, self.DTYPE)
+                trajectories = self._vam(batched_tokens, batched_commands, self._dtype)
 
         # --- Unpack per-sample results ---
         results: list[ModelPrediction] = []

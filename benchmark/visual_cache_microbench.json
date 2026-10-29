@@ -1,0 +1,206 @@
+{
+  "summary": {
+    "gpu": "NVIDIA L40S",
+    "images_per_step": 96,
+    "encoded_per_step_steady": 4.0,
+    "uncached_ms_mean": 1123.6893600955802,
+    "cached_ms_mean": 41.52251845593319,
+    "max_abs_deviation": 0.265625,
+    "max_rel_deviation": 0.05214723926380368,
+    "cache_memory_gib": 1.7197136878967285,
+    "args": {
+      "checkpoint": "nvidia/Alpamayo-1.5-10B",
+      "steps": 20,
+      "cameras": 4,
+      "context": 4,
+      "samples": 6,
+      "max_entries": 64,
+      "height": 1080,
+      "width": 1900,
+      "output": "benchmark/visual_cache_microbench.json"
+    },
+    "speedup": 27.06216775574737
+  },
+  "steps": [
+    {
+      "step": 0,
+      "images": 96,
+      "encoded": 16.0,
+      "uncached_ms": 1125.8781820069999,
+      "cached_ms": 412.72602300159633,
+      "max_abs_deviation": 0.0,
+      "max_rel_deviation": 0.0
+    },
+    {
+      "step": 1,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1130.771817988716,
+      "cached_ms": 51.755174063146114,
+      "max_abs_deviation": 0.1875,
+      "max_rel_deviation": 0.03592814371257485
+    },
+    {
+      "step": 2,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1123.3141920529306,
+      "cached_ms": 40.91495496686548,
+      "max_abs_deviation": 0.1875,
+      "max_rel_deviation": 0.03592814371257485
+    },
+    {
+      "step": 3,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1123.7015270162374,
+      "cached_ms": 40.04772996995598,
+      "max_abs_deviation": 0.1875,
+      "max_rel_deviation": 0.03592814371257485
+    },
+    {
+      "step": 4,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1124.1224179975688,
+      "cached_ms": 40.43412895407528,
+      "max_abs_deviation": 0.1875,
+      "max_rel_deviation": 0.038461538461538464
+    },
+    {
+      "step": 5,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1126.6866308869794,
+      "cached_ms": 40.53405800368637,
+      "max_abs_deviation": 0.15625,
+      "max_rel_deviation": 0.03125
+    },
+    {
+      "step": 6,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1123.0877119814977,
+      "cached_ms": 40.310215088538826,
+      "max_abs_deviation": 0.15625,
+      "max_rel_deviation": 0.03067484662576687
+    },
+    {
+      "step": 7,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1122.8741449303925,
+      "cached_ms": 41.74563393462449,
+      "max_abs_deviation": 0.15625,
+      "max_rel_deviation": 0.03067484662576687
+    },
+    {
+      "step": 8,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1123.077851952985,
+      "cached_ms": 42.0711999759078,
+      "max_abs_deviation": 0.265625,
+      "max_rel_deviation": 0.05214723926380368
+    },
+    {
+      "step": 9,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1122.9678509989753,
+      "cached_ms": 40.548680000938475,
+      "max_abs_deviation": 0.265625,
+      "max_rel_deviation": 0.05214723926380368
+    },
+    {
+      "step": 10,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1122.2944209584966,
+      "cached_ms": 40.40634597185999,
+      "max_abs_deviation": 0.265625,
+      "max_rel_deviation": 0.04748603351955307
+    },
+    {
+      "step": 11,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1121.0124489152804,
+      "cached_ms": 41.07904992997646,
+      "max_abs_deviation": 0.265625,
+      "max_rel_deviation": 0.04748603351955307
+    },
+    {
+      "step": 12,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1125.9740070672706,
+      "cached_ms": 41.972082923166454,
+      "max_abs_deviation": 0.203125,
+      "max_rel_deviation": 0.036312849162011177
+    },
+    {
+      "step": 13,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1125.7296049734578,
+      "cached_ms": 39.96794996783137,
+      "max_abs_deviation": 0.1796875,
+      "max_rel_deviation": 0.03212290502793296
+    },
+    {
+      "step": 14,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1120.4294069902971,
+      "cached_ms": 41.47479101084173,
+      "max_abs_deviation": 0.1796875,
+      "max_rel_deviation": 0.03463855421686747
+    },
+    {
+      "step": 15,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1122.9078880278394,
+      "cached_ms": 40.53267592098564,
+      "max_abs_deviation": 0.1796875,
+      "max_rel_deviation": 0.036163522012578615
+    },
+    {
+      "step": 16,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1121.1421450134367,
+      "cached_ms": 41.29450104665011,
+      "max_abs_deviation": 0.1796875,
+      "max_rel_deviation": 0.03422619047619048
+    },
+    {
+      "step": 17,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1123.1869929470122,
+      "cached_ms": 40.98005499690771,
+      "max_abs_deviation": 0.1484375,
+      "max_rel_deviation": 0.028273809523809524
+    },
+    {
+      "step": 18,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1122.359856031835,
+      "cached_ms": 40.90266302227974,
+      "max_abs_deviation": 0.171875,
+      "max_rel_deviation": 0.03273809523809524
+    },
+    {
+      "step": 19,
+      "images": 96,
+      "encoded": 4.0,
+      "uncached_ms": 1124.4569250848144,
+      "cached_ms": 41.95596091449261,
+      "max_abs_deviation": 0.171875,
+      "max_rel_deviation": 0.03273809523809524
+    }
+  ]
+}

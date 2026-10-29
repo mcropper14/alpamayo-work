@@ -1,0 +1,55 @@
+[
+  {
+    "targets": [
+      "localhost:6000"
+    ],
+    "labels": {
+      "run_uuid": "be083472-7b4b-47bf-be04-8c33ac333522",
+      "run_name": "Interact",
+      "user": "mcropper",
+      "node": "v021.ib.bridges2.psc.edu",
+      "slurm_job_id": "47395211",
+      "job": "alpasim-runtime-worker",
+      "component": "runtime"
+    }
+  },
+  {
+    "targets": [
+      "localhost:6002"
+    ],
+    "labels": {
+      "run_uuid": "be083472-7b4b-47bf-be04-8c33ac333522",
+      "run_name": "Interact",
+      "user": "mcropper",
+      "node": "v021.ib.bridges2.psc.edu",
+      "slurm_job_id": "47395211",
+      "job": "alpasim-node"
+    }
+  },
+  {
+    "targets": [
+      "localhost:6003"
+    ],
+    "labels": {
+      "run_uuid": "be083472-7b4b-47bf-be04-8c33ac333522",
+      "run_name": "Interact",
+      "user": "mcropper",
+      "node": "v021.ib.bridges2.psc.edu",
+      "slurm_job_id": "47395211",
+      "job": "alpasim-process"
+    }
+  },
+  {
+    "targets": [
+      "localhost:6004"
+    ],
+    "labels": {
+      "run_uuid": "be083472-7b4b-47bf-be04-8c33ac333522",
+      "run_name": "Interact",
+      "user": "mcropper",
+      "node": "v021.ib.bridges2.psc.edu",
+      "slurm_job_id": "47395211",
+      "job": "alpasim-dcgm"
+    }
+  }
+]

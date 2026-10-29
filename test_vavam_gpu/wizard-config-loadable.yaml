@@ -1,0 +1,452 @@
+defaults:
+  - config_schema
+  - _self_
+defines:
+  filesystem: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data
+  driver_model: ???
+  image_registry: ''
+  base_image: alpasim-base:0.134.0
+  hf_cache: /jet/home/mcropper/.cache/huggingface
+  drivers: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers
+  sensordata: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts
+  trafficsim_models: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/trafficsim-models
+  renderer_entrypoint: /app/internal/scripts/pycena/runtime/pycena_nrm_full
+  nre_max_workers: '4'
+  nre_max_backends_per_scene: '1'
+  helper: scripts
+  vscode: sources/remote-vscode-server
+  physics_cache_size: '16'
+  nre_cache_size: '5'
+wizard:
+  run_name: null
+  run_method: NONE
+  run_mode: ONESHOT
+  log_level: INFO
+  prometheus:
+    scrape_interval: 5s
+    file_sd_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/prometheus/file-sd
+    start_prometheus: true
+    run_uuid: null
+  description: unspecified
+  submitter: unspecified
+  latest_symlink: false
+  log_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu
+  array_job_dir: null
+  dry_run: false
+  baseport: 6000
+  runtime_server_port: null
+  validate_mount_points: false
+  driver_code_hash: null
+  driver_code_repo: null
+  helper: ???
+  vscode: ???
+  sqshcaches:
+    - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/sqsh
+    - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/sqsh/dev
+  slurm_job_id: 47395211
+  timeout: 600
+  nr_retries: 3
+  run_sim_services:
+    - driver
+    - renderer
+    - physics
+    - trafficsim
+    - controller
+    - runtime
+  debug_flags:
+    use_localhost: true
+  slurm_cpu_bind_none: false
+  fuse_dir: null
+  node_local_sqsh_cache_dir: null
+  node_local_sqsh_cache_max_gib: 500
+  enable_mps: false
+  external_services: null
+scenes:
+  scene_ids:
+    - clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e
+  test_suite_id: null
+  limit_to_first_n: 0
+  scene_cache: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage
+  scenes_csv:
+    - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/scenes/sim_scenes.csv
+  suites_csv:
+    - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/scenes/sim_suites.csv
+  sceneset_path: .
+  local_usdz_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage
+  nre_version_string: null
+services:
+  driver:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers:/mnt/drivers
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/output
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+      - /jet/home/mcropper/.cache/huggingface:/root/.cache/huggingface
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments: []
+    workdir: null
+    remap_root: false
+    command:
+      - uv run -m alpasim_driver.main
+      - --config-path=/mnt/output
+      - --config-name=driver-config.yaml
+      - host=0.0.0.0
+      - port={port}
+    replicas_per_container: 1
+    gpus:
+      - 0
+  renderer:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/ego-hoods:/mnt/ego-hoods
+    image: nvcr.io/nvidia/nre/nre-ga:26.04
+    external_image: true
+    pull_policy: missing
+    environments:
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - OMP_NUM_THREADS=1
+    workdir: null
+    remap_root: false
+    command:
+      - /app/internal/scripts/pycena/runtime/pycena_nrm_full
+      - serve-grpc
+      - --port={port}
+      - --host=0.0.0.0
+      - --artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz
+      - --egocar-hood-dir=/mnt/ego-hoods
+      - --no-enable-nrend
+      - --download-cache-dir /tmp/nre-cache-dir
+      - --cache-size=5
+      - --max-workers=4
+      - --enable-editing-actors
+    replicas_per_container: 1
+    gpus:
+      - 0
+  physics:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments:
+      - WARP_CACHE_PATH='/mnt/warp'
+    workdir: null
+    remap_root: false
+    command:
+      - uv run physics_server
+      - --host=0.0.0.0
+      - --port={port}
+      - --artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz
+      - --use-ground-mesh=true
+      - --cache-size=16
+      - --log-level=INFO
+    replicas_per_container: 1
+    gpus:
+      - 0
+  trafficsim:
+    volumes: []
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments: []
+    workdir: null
+    remap_root: false
+    command:
+      - echo 'no traffic simulation configured'
+    replicas_per_container: 1
+    gpus:
+      - 0
+  controller:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu/controller:/mnt/output
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/config
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments: []
+    workdir: null
+    remap_root: false
+    command:
+      - uv run python -m alpasim_controller.server
+      - --port={port}
+      - --log_dir=/mnt/output
+      - --log-level=INFO
+      - --config=/mnt/config/controller-config.yaml
+    replicas_per_container: 1
+    gpus: null
+  runtime:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/log_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/array_job_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments: []
+    workdir: null
+    remap_root: false
+    command:
+      - uv run python -m alpasim_runtime.simulate
+      - --user-config=/mnt/log_dir/{runtime_config_name}
+      - --network-config=/mnt/log_dir/generated-network-config.yaml
+      - --log-dir=/mnt/log_dir
+      - --log-level=INFO
+      - --array-job-dir=/mnt/array_job_dir
+      - --eval-config=/mnt/log_dir/eval-config.yaml
+    replicas_per_container: 1
+    gpus: null
+    depends_on:
+      - driver
+      - renderer
+      - physics
+      - trafficsim
+      - controller
+  prometheus:
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/log_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    image: alpasim-base:0.134.0
+    external_image: false
+    pull_policy: missing
+    environments: []
+    workdir: null
+    remap_root: false
+runtime:
+  max_rollout_retries: 2
+  scene_provider:
+    kind: usdz
+    usdz:
+      data_dir: null
+      artifact_cache_size: 10
+    trajdata:
+      cache_location: trajdata_cache
+      desired_dt: 0.1
+      load_vector_map: true
+      rebuild_cache: false
+      rebuild_maps: false
+      num_workers: 4
+      dataset:
+        name: null
+        data_dir: null
+        extra_params:
+          config_dir: null
+          num_timesteps_before: 30
+          num_timesteps_after: 80
+  smooth_trajectories: true
+  endpoints:
+    sensorsim_cache_size: '5'
+    renderer:
+      n_concurrent_rollouts: 4
+      skip: false
+    controller:
+      skip: false
+      n_concurrent_rollouts: 4
+    driver:
+      n_concurrent_rollouts: 4
+    physics:
+      n_concurrent_rollouts: 4
+      skip: false
+    trafficsim:
+      n_concurrent_rollouts: 4
+      skip: true
+  renderer:
+    kind: sensorsim
+    video_model_config: null
+  enable_autoresume: false
+  simulation_config:
+    n_sim_steps: 100
+    n_rollouts: 1
+    force_gt_duration_us: 3000000
+    skip_driver_during_force_gt: false
+    force_gt_frame_cache:
+      enabled: false
+      cache_dir: /mnt/nre-data/force_gt_frame_cache
+      extra_key: null
+    send_recording_ground_truth: false
+    render_bundling: BATCH_RENDER_RGB
+    control_timestep_us: 500000
+    pose_reporting_interval_us: 0
+    ego_mask_rig_config_id: null
+    planner_delay_us: 0
+    min_traffic_duration_us: 3000000
+    assert_zero_decision_delay: true
+    physics_update_mode: EGO_ONLY
+    route_generator_type: MAP
+    route_start_offset_m: 0.0
+    vehicle: null
+    cameras:
+      - height: 1080
+        width: 1920
+        logical_id: camera_front_wide_120fov
+        frame_interval_us: 500000
+        shutter_duration_us: 30000
+  extra_cameras:
+    - logical_id: camera_front_wide_120fov
+      rig_to_camera:
+        translation_m:
+          - 1.65897811
+          - -0.01443456
+          - 1.51539499
+        rotation_xyzw:
+          - -0.49929397355810856
+          - 0.5039939168301356
+          - -0.4972939976976715
+          - 0.49939397235113037
+      intrinsics:
+        model: opencv_pinhole
+        opencv_pinhole:
+          focal_length:
+            - 1545.0
+            - 1545.0
+          principal_point:
+            - 960.0
+            - 560.0
+          radial:
+            - -0.356123
+            - 0.172545
+            - -0.05231
+            - 0.0
+            - 0.0
+            - 0.0
+          tangential:
+            - -0.00213
+            - 0.000464
+          thin_prism:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+      resolution_hw:
+        - 1080
+        - 1920
+      shutter_type: ROLLING_TOP_TO_BOTTOM
+  nr_workers: 1
+trafficsim:
+  server:
+    max_workers: 4
+eval:
+  enabled: true
+  allow_aggregation_with_failed_rollouts: false
+  parse_unstructured_debug_info: true
+  vec_map:
+    incl_road_edges: true
+    incl_traffic_signs: true
+    incl_wait_lines: true
+    max_num_lanes: 20
+    num_pts_per_lane: 20
+  num_processes: 16
+  vehicle:
+    vehicle_corner_roundness: 0.5
+    vehicle_shrink_factor: 0.02
+  scorers:
+    min_ade:
+      time_deltas:
+        - 0.5
+        - 1.0
+        - 2.5
+        - 5.0
+      incl_z: false
+      target: GT
+    plan_deviation:
+      incl_z: false
+      avg_decay_rate: 0.1
+      min_timesteps: 5
+    image:
+      camera_logical_id: camera_front_wide_120fov
+    open_loop_collision:
+      horizon_s: 3.0
+  aggregation_modifiers:
+    max_dist_to_gt_trajectory: 4.0
+  scene_score:
+    enabled: true
+    progress_saturation_threshold: 0.8
+    min_gt_distance_for_full_score_m: 5.0
+  video:
+    render_video: true
+    video_layouts:
+      - DEFAULT
+    camera_id_to_render: camera_front_wide_120fov
+    reasoning_text_refresh_interval_s: 1.0
+    overlay_plans_on_camera: true
+    render_every_nth_frame: 1
+    generate_combined_video: false
+    combined_video_speed_factor: 0.33
+    metrics_table_entries:
+      - offroad_or_collision_at_fault
+      - collision_any
+      - collision_at_fault
+      - collision_front
+      - collision_lateral
+      - collision_rear
+      - offroad
+      - dist_to_gt_trajectory
+      - dist_to_gt_location
+      - progress
+      - progress_rel_to_total
+      - progress_rel
+      - safety_monitor_triggered
+    map_video:
+      map_radius_m: 20
+      ego_loc: BOTTOM_CENTER
+      rotate_map_to_ego: true
+      map_elements_to_plot:
+        - ROAD_LANE_CENTER
+        - ROAD_LANE_LEFT_EDGE
+        - ROAD_LANE_RIGHT_EDGE
+        - ROAD_EDGE
+        - STOP_LINE
+        - GT_LINESTRING
+        - EGO_GT_GHOST_POLYGON
+        - DRIVER_RESPONSES
+        - ROUTE
+        - AGENTS
+        - AGENT_IDS
+        - TRAFFIC_PREDICTIONS
+driver:
+  log_level: INFO
+  model:
+    model_type: vam
+    checkpoint_path: /mnt/drivers/vavam/VAM_width_1024_pretrained_139k.pt
+    device: cuda
+    tokenizer_path: /mnt/drivers/vavam/VQ_ds16_16384_llamagen_encoder.jit
+  host: 0.0.0.0
+  port: ???
+  inference:
+    use_cameras:
+      - camera_front_wide_120fov
+    max_batch_size: 32
+    subsample_factor: 1
+    context_length: 1
+  route:
+    default_command: 2
+    use_waypoint_commands: true
+    command_distance_threshold: 3.0
+    min_lookahead_distance: 20.0
+  output_dir: /mnt/output/driver
+  trajectory_optimizer:
+    enabled: false
+  plot_debug_images: false
+controller:
+  mpc_implementation: nonlinear
+  n_horizon: 20
+  dt_mpc: 0.1
+  gains:
+    long_position_weight: 2.0
+    lat_position_weight: 1.0
+    heading_weight: 1.0
+    acceleration_weight: 0.1
+    rel_front_steering_angle_weight: 5.0
+    rel_acceleration_weight: 1.0
+    idx_start_penalty: 10

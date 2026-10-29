@@ -85,6 +85,8 @@ class Rig:
     vehicle_config: (
         VehicleConfig | None
     )  # ego configuration if available in usdz checkpoint
+    # Pose of the recording's LiDAR in the rig frame, if the artifact has one.
+    rig_to_lidar: Pose | None = None
 
     @staticmethod
     def _parse_camera_frame_ranges(
@@ -193,6 +195,26 @@ class Rig:
             camera_frame_timestamps_us=camera_frame_timestamps_us,
         )
 
+    @staticmethod
+    def _parse_rig_to_lidar(
+        lidar_calibrations: dict[str, Any], sequence_id: str
+    ) -> Pose | None:
+        """The ``T_sensor_rig`` of the sequence's LiDAR (its pose in the rig frame)."""
+        calibrations = [
+            c for c in lidar_calibrations.values() if c["sequence_id"] == sequence_id
+        ]
+        if not calibrations:
+            return None
+        if len(calibrations) > 1:
+            names = sorted(c["logical_sensor_name"] for c in calibrations)
+            raise ValueError(
+                f"Rig for {sequence_id=} has several LiDARs {names}; "
+                "cannot pick one to render for the driver."
+            )
+        return Pose.from_se3(
+            np.array(calibrations[0]["T_sensor_rig"], dtype=np.float32)
+        )
+
     @classmethod
     def load_from_json(cls, json_str: str) -> list[Self]:
         """
@@ -202,6 +224,7 @@ class Rig:
         world_to_nre = np.array(rig_json["world_to_nre"]["matrix"])
 
         camera_calibrations = rig_json["camera_calibrations"]
+        lidar_calibrations = rig_json.get("lidar_calibrations", {})
         unique_camera_id_to_camera_id = {
             uci: camera_calibrations[uci]["logical_sensor_name"]
             for uci in camera_calibrations
@@ -294,6 +317,9 @@ class Rig:
                     camera_frame_ranges_us=camera_frame_ranges_us,
                     world_to_nre=world_to_nre,
                     vehicle_config=vehicle_config,
+                    rig_to_lidar=cls._parse_rig_to_lidar(
+                        lidar_calibrations, sequence_id
+                    ),
                 )
             )
 

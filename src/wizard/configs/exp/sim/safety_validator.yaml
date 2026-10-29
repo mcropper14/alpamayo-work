@@ -1,0 +1,20 @@
+# @package _global_
+# LiDAR-based safety validator on top of the driver's trajectory proposals.
+#
+# The runtime renders one LiDAR spin per camera render and forwards it to the
+# driver, which detects obstacles in it (src/lidar_perception) and, per step,
+# drives the first sampled candidate the validator accepts, or speed-scales the
+# best one if none pass. See alpasim_driver.safety_filter.
+#
+# Usage: uv run alpasim_wizard ... driver=alpamayo1_5 +exp/sim=safety_validator
+
+runtime:
+  simulation_config:
+    render_lidar_for_driver: true
+
+driver:
+  model:
+    # Candidates to choose between (Alpamayo models only; others always give 1).
+    num_trajectory_samples: 5
+  safety_validator:
+    enabled: true

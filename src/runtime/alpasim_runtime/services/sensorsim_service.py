@@ -23,6 +23,10 @@ from alpasim_grpc.v0.sensorsim_pb2 import (
     BatchRGBRenderReturnItem,
     DynamicObject,
     ImageFormat,
+    LidarDeviceType,
+    LidarRenderRequest,
+    LidarRenderReturn,
+    LidarSpec,
     PosePair,
     RGBRenderRequest,
     RGBRenderReturn,
@@ -35,6 +39,7 @@ from alpasim_runtime.services.session_configs import RendererSessionConfig
 from alpasim_runtime.telemetry.rpc_wrapper import profiled_rpc_call
 from alpasim_runtime.types import Clock, RuntimeCamera
 from alpasim_utils.geometry import Pose, Trajectory, pose_to_grpc
+from alpasim_utils.lidar_payload import pack_lidar_spin
 from alpasim_utils.types import ImageWithMetadata
 
 logger = logging.getLogger(__name__)
@@ -524,6 +529,58 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
             )
 
         return (images_with_metadata, response.driver_data)
+
+    async def render_lidar_payload(
+        self,
+        ego_trajectory: Trajectory,
+        traffic_trajectories: Dict[str, Trajectory],
+        trigger: Clock.Trigger,
+        scene_id: str,
+        rig_to_lidar: Pose,
+    ) -> bytes:
+        """Render one PANDAR128 spin over ``trigger`` and pack it for the driver.
+
+        The sensor is placed at ``rig_to_lidar`` on the ego rig; points come back
+        in that sensor frame and the payload carries the mount pose.
+        """
+        start_us = trigger.time_range_us.start
+        end_us = trigger.time_range_us.stop
+        if self.skip:
+            return pack_lidar_spin(
+                b"", n_points=0, timestamp_us=end_us, rig_to_sensor=rig_to_lidar
+            )
+
+        def pose_pair(trajectory: Trajectory, delta: Pose | None = None) -> PosePair:
+            start_pose = trajectory.interpolate_pose(start_us)
+            end_pose = trajectory.interpolate_pose(end_us)
+            if delta is not None:
+                start_pose = start_pose @ delta
+                end_pose = end_pose @ delta
+            return PosePair(
+                start_pose=pose_to_grpc(start_pose), end_pose=pose_to_grpc(end_pose)
+            )
+
+        request = LidarRenderRequest(
+            scene_id=scene_id,
+            lidar_config=LidarSpec(lidar_type=LidarDeviceType.PANDAR128),
+            frame_start_us=start_us,
+            frame_end_us=end_us,
+            sensor_pose=pose_pair(ego_trajectory, delta=rig_to_lidar),
+            dynamic_objects=[
+                DynamicObject(track_id=track_id, pose_pair=pose_pair(traj))
+                for track_id, traj in traffic_trajectories.items()
+                if start_us in traj.time_range_us and end_us in traj.time_range_us
+            ],
+        )
+        response: LidarRenderReturn = await self._sensorsim_rpc(
+            "render_lidar", self.stub.render_lidar, request
+        )
+        return pack_lidar_spin(
+            xyz_buffer=response.point_xyzs_buffer,
+            n_points=response.num_points,
+            timestamp_us=end_us,
+            rig_to_sensor=rig_to_lidar,
+        )
 
     async def render(
         self,

@@ -10,6 +10,7 @@ import pytest
 from alpasim_grpc.v0.logging_pb2 import RolloutMetadata
 from alpasim_runtime.config import (
     PhysicsUpdateMode,
+    PoseConfig,
     RuntimeCameraConfig,
     SimulationConfig,
     VehicleConfig,
@@ -349,3 +350,44 @@ def test_create_classifies_vector_map_failures(
             rollouts_dir=str(tmp_path),
             renderer_service=_sensorsim_renderer(),
         )
+
+
+def _create_with_lidar(tmp_path, data_source, **overrides) -> UnboundRollout:
+    return UnboundRollout.create(
+        simulation_config=_simulation_config(render_lidar_for_driver=True, **overrides),
+        scene_id="scene",
+        version_ids=RolloutMetadata.VersionIds(),
+        data_source=data_source,
+        rollouts_dir=str(tmp_path),
+        renderer_service=_sensorsim_renderer(),
+    )
+
+
+def test_create_uses_scene_lidar_calibration(tmp_path) -> None:
+    artifact = _artifact()
+    artifact.rig.rig_to_lidar = _pose_at_x(1.17)
+
+    rollout = _create_with_lidar(tmp_path, artifact)
+
+    assert rollout.rig_to_lidar is artifact.rig.rig_to_lidar
+
+
+def test_create_prefers_configured_lidar_pose(tmp_path) -> None:
+    artifact = _artifact()
+    artifact.rig.rig_to_lidar = _pose_at_x(1.17)
+
+    rollout = _create_with_lidar(
+        tmp_path,
+        artifact,
+        rig_to_lidar=PoseConfig(
+            translation_m=(0.5, 0.0, 2.4), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)
+        ),
+    )
+
+    assert rollout.rig_to_lidar is not None
+    np.testing.assert_allclose(rollout.rig_to_lidar.vec3, [0.5, 0.0, 2.4])
+
+
+def test_create_without_lidar_pose_is_invalid_scene(tmp_path) -> None:
+    with pytest.raises(InvalidSceneError, match="no LiDAR calibration"):
+        _create_with_lidar(tmp_path, _artifact())

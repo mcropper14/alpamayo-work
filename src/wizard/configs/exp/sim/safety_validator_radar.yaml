@@ -1,0 +1,34 @@
+# @package _global_
+# Safety validator with LiDAR and simulated radar.
+#
+# The runtime simulates radar scans from ground-truth traffic (the renderer has
+# no radar; see alpasim_runtime.radar) and forwards them with the LiDAR spin.
+# The driver takes obstacle speeds from radar range rates and keeps radar
+# detections LiDAR misses as lower-confidence obstacles (alpasim_driver.radar_fusion).
+#
+# Usage: uv run alpasim_wizard ... driver=alpamayo1_5 +exp/sim=safety_validator_radar
+# Radar only: add runtime.simulation_config.render_lidar_for_driver=false
+
+defaults:
+  - safety_validator
+  - _self_
+
+runtime:
+  simulation_config:
+    # A front bumper radar with a long- and a mid-range beam (about 4.0 m
+    # ahead of the rear axle on the default Hyperion 8 vehicle).
+    radars:
+      - name: front_long_range
+        rig_to_radar:
+          translation_m: [4.0, 0.0, 0.5]
+          rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+        max_range_m: 200.0
+        half_fov_deg: 9.0
+        azimuth_noise_deg: 0.1
+      - name: front_mid_range
+        rig_to_radar:
+          translation_m: [4.0, 0.0, 0.5]
+          rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+        max_range_m: 70.0
+        half_fov_deg: 45.0
+        azimuth_noise_deg: 0.5

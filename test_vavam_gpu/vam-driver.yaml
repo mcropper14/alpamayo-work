@@ -1,0 +1,49 @@
+log_level: INFO
+model:
+  model_type: vam
+  checkpoint_path: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers/vavam/VAM_width_1024_pretrained_139k.pt
+  device: cuda
+  tokenizer_path: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers/vavam/VQ_ds16_16384_llamagen_encoder.jit
+  cfg_guidance_weight: null
+  force_determinism: false
+  num_trajectory_samples: 1
+  image_decode_device: cpu
+  trajectory_candidate_microbatch_size: null
+  trajectory_selection:
+    strategy: ALWAYS_FIRST
+    max_num_distance_points: 64
+    skip_first_n_distance_points: 0
+host: 0.0.0.0
+port: 6005
+inference:
+  use_cameras:
+  - camera_front_wide_120fov
+  max_batch_size: 32
+  subsample_factor: 1
+  context_length: 1
+  output_frequency_hz: 10
+route:
+  default_command: 2
+  use_waypoint_commands: true
+  command_distance_threshold: 3.0
+  min_lookahead_distance: 20.0
+trajectory_optimizer:
+  enabled: false
+  smoothness_weight: 1.0
+  deviation_weight: 0.1
+  comfort_weight: 2.0
+  max_iterations: 100
+  retime_in_frenet: true
+  retime_alpha: 0.25
+  max_deviation: 2.0
+  max_heading_change: 0.5236
+  max_speed: 15.0
+  max_accel: 5.0
+  max_abs_yaw_rate: 0.95
+  max_abs_yaw_acc: 1.93
+  max_lon_acc_pos: 4.89
+  max_lon_acc_neg: -4.05
+  max_abs_lon_jerk: 8.37
+output_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu
+plot_debug_images: false
+rectification: null

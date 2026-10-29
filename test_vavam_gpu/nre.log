@@ -1,0 +1,189 @@
+[2026-10-04 13:28:27,327][INFO] serve-grpc args (nre_version=26.4.149-af938b3f):
+{
+  "port": 6006,
+  "host": "0.0.0.0",
+  "artifact_glob": "/mnt/nre-data/single-scene-stage/*.usdz",
+  "egocar_hood_dir": "/mnt/ego-hoods",
+  "enable_nrend": false,
+  "download_cache_dir": "/tmp/nre-cache-dir",
+  "cache_size": 16,
+  "max_workers": 4,
+  "enable_editing_actors": true,
+  "use_gsplat": null,
+  "enable_difix": null,
+  "difix_url": null,
+  "difix_cache": null,
+  "difix_model_filename": null,
+  "difix_resolution": null,
+  "health_port": null,
+  "test_scenes_are_valid": false,
+  "renderer": "DEFAULT",
+  "enable_harmonizer": false,
+  "harmonizer_url": "https://huggingface.co/nvidia/DiffusionHarmonizer/blob/main/harmonizer_nontemporal.pt",
+  "harmonizer_cache": "~/.cache/nre/harmonizer",
+  "harmonizer_model_filename": "harmonizer_nontemporal.pt",
+  "harmonizer_resolution": [
+    576,
+    1024
+  ],
+  "ray_chunk_size": 4611686018427387904,
+  "download_cache_size": 5,
+  "metrics_output_dir": null,
+  "enable_timing": false,
+  "timing_verbosity": "BASIC",
+  "timing_logfile": null,
+  "timing_synchronize": false,
+  "profiling_backend": "NONE"
+}
+[2026-10-04 13:28:27,327][INFO] Renderer backend: default
+[2026-10-04 13:28:27,327][INFO] Starting grpc server with grpc_config.max_workers=4 and cache_size=16 (LRU with OOM retry)
+[2026-10-04 13:28:27,362][INFO] Scene cache initialized in /tmp/nre-cache-dir with max size 5
+[2026-10-04 13:28:27,363][INFO] Identifying as self.version_id=version_id: "26.4.149"
+git_hash: "af938b3f"
+grpc_api_version {
+  patch: 1
+}
+
+[2026-10-04 13:28:27,424][INFO] Available scenes: ['clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6'].
+[2026-10-04 13:28:27,424][INFO] Available egocar masks: EgocarRigBank().
+[2026-10-04 13:28:27,429][INFO] BackendCache initialized with LRU eviction: maxsize=16, OOM retry enabled
+[2026-10-04 13:28:27,434][INFO] Serving on 0.0.0.0:6006 (health on same port)
+[2026-10-04 13:30:33,703][INFO] get_version
+[2026-10-04 13:30:33,842][INFO] get_available_scenes
+[2026-10-04 13:30:50,647][INFO] get_available_cameras
+[2026-10-04 13:30:50,647][INFO] Creating new backend for clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6 from /mnt/nre-data/single-scene-stage/d957b5d3-1f76-412f-8332-8eb763ec88cd.usdz
+[2026-10-04 13:30:51,421][INFO] Upgrading config from 26.1.112 to 26.4.149...
+[2026-10-04 13:30:51,421][INFO]  no changes from 26.1.112 to 26.2.80
+[2026-10-04 13:30:51,421][INFO]  converting from 26.2.80 to 26.2.81
+[2026-10-04 13:30:51,796][INFO]  no changes from 26.2.81 to 26.4.149 (target)
+[2026-10-04 13:30:51,850][INFO] Using renderer: 3dgut-nrend
+[2026-10-04 13:30:52,841][INFO] World Size: 1
+[2026-10-04 13:30:52,841][INFO] Node Count: 1
+[2026-10-04 13:30:52,841][INFO] Device Count per Node: 1
+[2026-10-04 13:30:52,842][INFO] Log every 50 steps
+[2026-10-04 13:30:52,880][INFO] GaussiansComposite/__init__
+[2026-10-04 13:30:53,450][INFO] BaseCalib: start_global_step=250
+[2026-10-04 13:30:53,450][INFO] FreePoseCalib: calib ON for cameras
+[2026-10-04 13:30:53,450][INFO] FreePoseCalib: calib OFF for lidars
+[2026-10-04 13:30:53,450][INFO] FreePoseCalib: enable_torch_compile=True
+[2026-10-04 13:30:53,451][INFO] SkyEnvMapBackground: min_grad_updates=1000
+[2026-10-04 13:30:53,488][INFO] LayerTrackIds: Initializing track filtering from 139 available tracks
+[2026-10-04 13:30:53,505][INFO] SHGaussianModel/progressive_training: increase_frequency=1000 increase_step=1
+[2026-10-04 13:30:53,505][INFO] SHGaussianModel/time_embed: Fourier features enabled with dim=5
+[2026-10-04 13:30:53,510][INFO] LayerTrackIds: Initializing track filtering from 139 available tracks
+[2026-10-04 13:30:53,520][INFO] SHGaussianModel/progressive_training: increase_frequency=1000 increase_step=1
+[2026-10-04 13:30:53,528][INFO] LayerTrackIds: Initializing track filtering from 139 available tracks
+[2026-10-04 13:30:53,929][INFO] SHGaussianModel/progressive_training: increase_frequency=1000 increase_step=1
+[2026-10-04 13:30:53,930][INFO] SHGaussianModel/time_embed: Fourier features enabled with dim=20
+[2026-10-04 13:30:53,962][INFO] BaseTracksCalib: start_global_step=500
+[2026-10-04 13:30:53,974][INFO] LayerTrackIds: Initializing track filtering from 139 available tracks
+[2026-10-04 13:30:54,000][INFO] SHGaussianModel/progressive_training: increase_frequency=1000 increase_step=1
+[2026-10-04 13:30:54,000][INFO] BaseTracksCalib: start_global_step=500
+[2026-10-04 13:30:54,009][INFO] DeformableGaussianModel: deformnet_start_iteration=1000
+[2026-10-04 13:30:54,215][INFO] TcnnMultiLevelEncoding/progressive_training: update_frequency=500
+[2026-10-04 13:30:54,443][INFO] call/n_frames_per_camera: [594, 594, 594, 594, 594, 594]
+[2026-10-04 13:30:54,444][INFO] call/n_frames_per_lidar: []
+[2026-10-04 13:30:54,463][INFO] MCMCStrategy/relocate:
+[2026-10-04 13:30:54,463][INFO]     |─start_iteration=500
+[2026-10-04 13:30:54,463][INFO]     |─end_iteration=35000
+[2026-10-04 13:30:54,463][INFO]     |─frequency=100
+[2026-10-04 13:30:54,463][INFO]     └─max_invisible_steps=disabled
+[2026-10-04 13:30:54,463][INFO] MCMCStrategy/add:
+[2026-10-04 13:30:54,463][INFO]     |─start_iteration=20000
+[2026-10-04 13:30:54,463][INFO]     |─end_iteration=35000
+[2026-10-04 13:30:54,463][INFO]     |─frequency=100
+[2026-10-04 13:30:54,463][INFO]     └─max_n_gaussians=2500000
+[2026-10-04 13:30:54,463][INFO] MCMCStrategy/perturb:
+[2026-10-04 13:30:54,463][INFO]     |─start_iteration=1
+[2026-10-04 13:30:54,463][INFO]     |─end_iteration=10000000
+[2026-10-04 13:30:54,463][INFO]     |─frequency=1
+[2026-10-04 13:30:54,463][INFO]     └─noise_lr=5000.0
+[NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+[NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients ON
+[NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients ON
+[NuRec::NRend][INFO] ::: Camera tiling size: 16x16
+[NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+[NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+[NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+[NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.4.149 opened
+[2026-10-04 13:30:54,477][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+[NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+[NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients ON
+[NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients ON
+[NuRec::NRend][INFO] ::: Camera tiling size: 16x16
+[NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+[NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+[NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+[NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+[NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.4.149 opened
+[2026-10-04 13:30:54,486][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+[2026-10-04 13:31:04,784][INFO] Upgrading config from 26.1.112 to 26.4.149...
+[2026-10-04 13:31:04,784][INFO]  no changes from 26.1.112 to 26.3.24
+[2026-10-04 13:31:04,784][INFO]  converting from 26.3.24 to 26.3.25
+[2026-10-04 13:31:04,785][INFO] Adding missing gaussians_strategy.invisible_steps.* buffers for MCMC checkpoints
+[2026-10-04 13:31:04,785][INFO]   adding gaussians_strategy.invisible_steps.background with shape (2154069,)
+[2026-10-04 13:31:04,785][INFO]   adding gaussians_strategy.invisible_steps.road with shape (270463,)
+[2026-10-04 13:31:04,785][INFO]   adding gaussians_strategy.invisible_steps.dynamic_rigids with shape (59274,)
+[2026-10-04 13:31:04,785][INFO]   adding gaussians_strategy.invisible_steps.dynamic_deformables with shape (16194,)
+[2026-10-04 13:31:04,785][INFO] Assuming no model changes from version 26.3.25 to 26.4.149
+[2026-10-04 13:31:05,235][INFO] AssetBank initialized with no external assets
+[2026-10-04 13:31:24,755][INFO] get_available_ego_masks
+[2026-10-04 13:31:24,757][INFO] batch_render_rgb: 1 cameras
+[NuRec::NRend][INFO] ::: JIT: compiled _Z19preProcessParticlesjjPKN4tcnn4tvecIiLj2ELm4EEElPKNS0_IfLj7ELm4EEES6_PKm,_Z14projectOnTilesN4tcnn4tvecIiLj2ELm4EEEjNS0_IfLj2ELm4EEES2_NS_4tmatIfLj4ELj3EEEN5nrend21SensorProjectionModelENS0_IfLj3ELm4EEES4_NS5_12TSensorStateEPjPS2_PNS0_IfLj4ELm4EEEPS1_PfSE_SE_PKm,_Z21expandTileProjectionsN4tcnn4tvecIiLj2ELm4EEEjN5nrend21SensorProjectionModelENS2_12TSensorStateEPKjPKNS0_IfLj2ELm4EEEPKNS0_IfLj4ELm4EEEPKS1_PKfPKmPmPj,_Z11renderLidarN5nrend16RenderParametersEPKN4tcnn4tvecIjLj2ELm4EEEPKjPKNS2_IfLj3ELm4EEESA_PKlPKNS2_IiLj2ELm4EEEPjPfPS8_SH_PvSJ_PKNS2_IfLj2ELm4EEEPKNS2_IfLj4ELm4EEEPKfPKm,_Z12renderCameraN5nrend16RenderParametersEPKN4tcnn4tvecIjLj2ELm4EEEPKjPKNS2_IfLj3ELm4EEESA_PKlPKNS2_IiLj2ELm4EEEPjPfPS8_SH_PvSJ_PKNS2_IfLj2ELm4EEEPKNS2_IfLj4ELm4EEEPKfPKm,_Z12prepareSceneN4tcnn4tvecIiLj2ELm4EEEjNS0_IfLj2ELm4EEES2_NS_4tmatIfLj4ELj3EEEN5nrend21SensorProjectionModelENS0_IfLj3ELm4EEES4_NS5_12TSensorStateEPjPfSA_SA_SA_SA_PKm,_Z20renderBackwardCameraN5nrend16RenderParametersEPKN4tcnn4tvecIjLj2ELm4EEEPKjPKN
+[NuRec::NRend][INFO] ::: CudaKernelResources : cuda resources created on device 0.
+[2026-10-04 13:31:50,223][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:56,210][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:56,554][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:56,902][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:57,242][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:57,585][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:57,925][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:58,288][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:58,629][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:58,967][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:59,305][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:59,646][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:31:59,984][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:00,324][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:00,665][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:01,011][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:01,354][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:01,698][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:02,042][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:02,388][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:02,743][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:03,110][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:03,493][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:03,879][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:04,237][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:04,590][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:04,965][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:05,351][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:05,712][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:06,096][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:06,459][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:06,835][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:07,222][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:07,624][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:08,169][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:08,573][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:08,955][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:09,337][INFO] batch_render_rgb: 1 cameras
+[2026-10-04 13:32:09,719][INFO] batch_render_rgb: 1 cameras

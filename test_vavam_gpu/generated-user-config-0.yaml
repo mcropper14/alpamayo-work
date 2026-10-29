@@ -1,0 +1,108 @@
+enable_autoresume: false
+endpoints:
+  controller:
+    n_concurrent_rollouts: 4
+    skip: false
+  driver:
+    n_concurrent_rollouts: 4
+  physics:
+    n_concurrent_rollouts: 4
+    skip: false
+  renderer:
+    n_concurrent_rollouts: 4
+    skip: false
+  sensorsim_cache_size: '5'
+  trafficsim:
+    n_concurrent_rollouts: 4
+    skip: true
+extra_cameras:
+- intrinsics:
+    model: opencv_pinhole
+    opencv_pinhole:
+      focal_length:
+      - 1545.0
+      - 1545.0
+      principal_point:
+      - 960.0
+      - 560.0
+      radial:
+      - -0.356123
+      - 0.172545
+      - -0.05231
+      - 0.0
+      - 0.0
+      - 0.0
+      tangential:
+      - -0.00213
+      - 0.000464
+      thin_prism:
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+  logical_id: camera_front_wide_120fov
+  resolution_hw:
+  - 1080
+  - 1920
+  rig_to_camera:
+    rotation_xyzw:
+    - -0.49929397355810856
+    - 0.5039939168301356
+    - -0.4972939976976715
+    - 0.49939397235113037
+    translation_m:
+    - 1.65897811
+    - -0.01443456
+    - 1.51539499
+  shutter_type: ROLLING_TOP_TO_BOTTOM
+max_rollout_retries: 2
+nr_workers: 1
+prometheus:
+  url: http://localhost:6001
+  worker_ports:
+  - 6000
+renderer:
+  kind: sensorsim
+scene_provider:
+  kind: usdz
+  trajdata:
+    cache_location: trajdata_cache
+    dataset:
+      extra_params:
+        num_timesteps_after: 80
+        num_timesteps_before: 30
+    desired_dt: 0.1
+    load_vector_map: true
+    num_workers: 4
+    rebuild_cache: false
+    rebuild_maps: false
+  usdz:
+    artifact_cache_size: 10
+    data_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage
+scenes:
+- scene_id: clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6
+simulation_config:
+  assert_zero_decision_delay: true
+  cameras:
+  - frame_interval_us: 500000
+    height: 1080
+    logical_id: camera_front_wide_120fov
+    shutter_duration_us: 30000
+    width: 1920
+  control_timestep_us: 500000
+  force_gt_duration_us: 3000000
+  force_gt_frame_cache:
+    cache_dir: /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/force_gt_frame_cache
+    enabled: false
+  min_traffic_duration_us: 3000000
+  n_rollouts: 1
+  n_sim_steps: 100
+  physics_update_mode: EGO_ONLY
+  planner_delay_us: 0
+  pose_reporting_interval_us: 0
+  render_bundling: BATCH_RENDER_RGB
+  route_generator_type: MAP
+  route_start_offset_m: 0.0
+  send_recording_ground_truth: false
+  skip_driver_during_force_gt: false
+smooth_trajectories: true

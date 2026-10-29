@@ -196,12 +196,11 @@ def test_vam_policy_drive_flow(tmp_path: Path) -> None:
         response: DriveResponse = service.drive(drive_request, None)
 
         assert len(response.trajectory.poses) > 1
-        latest_pose = response.trajectory.poses[0]
-        # Last submitted pose was at index=context with timestamp base_ts + context * dt
-        expected_last_ts = base_ts + context * dt
-        expected_last_x = float(context)
-        assert latest_pose.timestamp_us == expected_last_ts
-        assert pytest.approx(latest_pose.pose.vec.x, rel=1e-5) == expected_last_x
+        anchor_pose = response.trajectory.poses[0]
+        # VAM reports no model-t0 metadata, so the trajectory is anchored at the
+        # request time, at the latest submitted pose (index=context).
+        assert anchor_pose.timestamp_us == drive_request.time_now_us
+        assert pytest.approx(anchor_pose.pose.vec.x, rel=1e-5) == float(context)
     finally:
         service.stop_worker()
         if session_uuid in service._sessions:

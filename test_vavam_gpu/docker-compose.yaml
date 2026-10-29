@@ -1,0 +1,261 @@
+networks:
+  microservices_network:
+    driver: bridge
+services:
+  driver-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers:/mnt/drivers
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/output
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+      - /jet/home/mcropper/.cache/huggingface:/root/.cache/huggingface
+    pull_policy: missing
+    image: alpasim-base:0.134.0
+    build:
+      context: /ocean/projects/cis260312p/mcropper/Documents/alpasim
+      dockerfile: Dockerfile
+      tags:
+        - alpasim-base:0.134.0
+    entrypoint: bash
+    command:
+      - -c
+      - |-
+        umask 0000
+        uv run -m alpasim_driver.main --config-path=/mnt/output --config-name=driver-config.yaml host=0.0.0.0 port=6005
+    ports:
+      - 6005:6005
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities:
+                - gpu
+              device_ids:
+                - '0'
+  renderer-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/ego-hoods:/mnt/ego-hoods
+    pull_policy: missing
+    image: nvcr.io/nvidia/nre/nre-ga:26.04
+    entrypoint: bash
+    command:
+      - -c
+      - |-
+        umask 0000
+        /app/internal/scripts/pycena/runtime/pycena_nrm_full serve-grpc --port=6006 --host=0.0.0.0 --artifact-glob=/mnt/nre-data/./**/*.usdz --egocar-hood-dir=/mnt/ego-hoods --no-enable-nrend --download-cache-dir /tmp/nre-cache-dir --cache-size=5 --max-workers=4 --enable-editing-actors
+    environment:
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - OMP_NUM_THREADS=1
+    ports:
+      - 6006:6006
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities:
+                - gpu
+              device_ids:
+                - '0'
+  physics-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    pull_policy: missing
+    image: alpasim-base:0.134.0
+    build:
+      context: /ocean/projects/cis260312p/mcropper/Documents/alpasim
+      dockerfile: Dockerfile
+      tags:
+        - alpasim-base:0.134.0
+    entrypoint: bash
+    command:
+      - -c
+      - |-
+        umask 0000
+        uv run physics_server --host=0.0.0.0 --port=6007 --artifact-glob=/mnt/nre-data/./**/*.usdz --use-ground-mesh=true --cache-size=16 --log-level=INFO
+    environment:
+      - WARP_CACHE_PATH='/mnt/warp'
+    ports:
+      - 6007:6007
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities:
+                - gpu
+              device_ids:
+                - '0'
+  controller-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu/controller:/mnt/output
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/config
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    pull_policy: missing
+    image: alpasim-base:0.134.0
+    build:
+      context: /ocean/projects/cis260312p/mcropper/Documents/alpasim
+      dockerfile: Dockerfile
+      tags:
+        - alpasim-base:0.134.0
+    entrypoint: bash
+    command:
+      - -c
+      - |-
+        umask 0000
+        uv run python -m alpasim_controller.server --port=6008 --log_dir=/mnt/output --log-level=INFO --config=/mnt/config/controller-config.yaml
+    ports:
+      - 6008:6008
+  prometheus-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/log_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    pull_policy: missing
+    image: alpasim-base:0.134.0
+    build:
+      context: /ocean/projects/cis260312p/mcropper/Documents/alpasim
+      dockerfile: Dockerfile
+      tags:
+        - alpasim-base:0.134.0
+    entrypoint: bash
+    command:
+      - -c
+      - |
+        umask 0000
+        set -euo pipefail
+
+        START_PROMETHEUS=true
+        PROMETHEUS_BIN=
+        if [[ "$$START_PROMETHEUS" == "true" ]]; then
+          if command -v prometheus >/dev/null 2>&1; then
+            PROMETHEUS_BIN=prometheus
+          else
+            echo "prometheus binary not found" >&2
+            exit 1
+          fi
+        fi
+
+        if command -v node_exporter >/dev/null 2>&1; then
+          NODE_EXPORTER_BIN=node_exporter
+        elif command -v prometheus-node-exporter >/dev/null 2>&1; then
+          NODE_EXPORTER_BIN=prometheus-node-exporter
+        else
+          echo "node_exporter binary not found" >&2
+          exit 1
+        fi
+
+        start_slurm_process_exporter() {
+          uv run --no-sync --project /repo/src/wizard \
+            python -m alpasim_wizard.telemetry.slurm_process_exporter \
+            --job-id="$${SLURM_JOB_ID}" \
+            --port="6003" \
+            --procfs=/host/proc \
+            --cgroupfs=/host/sys/fs/cgroup &
+          PROCESS_PID=$$!
+          PIDS+=("$$PROCESS_PID")
+        }
+
+        # hwmon/nvme sysfs reads issue live NVMe admin commands; a wedged controller
+        # blocks them in uninterruptible sleep and kills the whole /metrics endpoint.
+        # OS identity and filesystem-capacity metrics require mounting the host root,
+        # but AlpaSim telemetry does not consume them.
+        $$NODE_EXPORTER_BIN \
+          --web.listen-address=0.0.0.0:6002 \
+          --path.procfs=/host/proc \
+          --path.sysfs=/host/sys \
+          --no-collector.systemd \
+          --no-collector.hwmon \
+          --no-collector.nvme \
+          --no-collector.os \
+          --no-collector.filesystem &
+        NODE_PID=$$!
+        PIDS=("$$NODE_PID")
+
+        if [[ "$${ALPASIM_PROCESS_EXPORTER_MODE:-container}" == "host" ]]; then
+          :
+        elif [[ -n "$${SLURM_JOB_ID:-}" ]]; then
+          start_slurm_process_exporter
+        else
+          if command -v process-exporter >/dev/null 2>&1; then
+            PROCESS_EXPORTER_BIN=process-exporter
+          elif command -v prometheus-process-exporter >/dev/null 2>&1; then
+            PROCESS_EXPORTER_BIN=prometheus-process-exporter
+          else
+            PROCESS_EXPORTER_BIN=
+          fi
+          if [[ -z "$${PROCESS_EXPORTER_BIN}" ]]; then
+            echo "process-exporter binary not found" >&2
+            exit 1
+          fi
+          $$PROCESS_EXPORTER_BIN \
+            --web.listen-address=0.0.0.0:6003 \
+            --procfs=/host/proc \
+            --config.path=/mnt/log_dir/prometheus/process-exporter.yml &
+          PROCESS_PID=$$!
+          PIDS+=("$$PROCESS_PID")
+        fi
+
+        if command -v dcgm-exporter >/dev/null 2>&1; then
+          dcgm-exporter -f /mnt/log_dir/prometheus/dcgm-counters.csv -a :6004 &
+          DCGM_PID=$$!
+          PIDS+=("$$DCGM_PID")
+        else
+          echo "dcgm-exporter binary not found; GPU exporter disabled" >&2
+        fi
+
+        trap 'kill "$${PIDS[@]}" 2>/dev/null || true' TERM INT
+
+        if [[ "$$START_PROMETHEUS" == "true" ]]; then
+          exec $$PROMETHEUS_BIN \
+            --config.file=/mnt/log_dir/prometheus/prometheus.yml \
+            --storage.tsdb.path=/mnt/log_dir/prometheus/data \
+            --enable-feature=promql-at-modifier \
+            --web.listen-address=0.0.0.0:6001
+        fi
+
+        wait
+    ports:
+      - 6001:6001
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+  runtime-0:
+    network_mode: host
+    volumes:
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/nre-artifacts/single-scene-stage:/mnt/nre-data
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/log_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu:/mnt/array_job_dir
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/src:/repo/src
+      - /ocean/projects/cis260312p/mcropper/Documents/alpasim/plugins:/repo/plugins
+    pull_policy: missing
+    image: alpasim-base:0.134.0
+    build:
+      context: /ocean/projects/cis260312p/mcropper/Documents/alpasim
+      dockerfile: Dockerfile
+      tags:
+        - alpasim-base:0.134.0
+    entrypoint: bash
+    command:
+      - -c
+      - |-
+        umask 0000
+        uv run python -m alpasim_runtime.simulate --user-config=/mnt/log_dir/generated-user-config-0.yaml --network-config=/mnt/log_dir/generated-network-config.yaml --log-dir=/mnt/log_dir --log-level=INFO --array-job-dir=/mnt/array_job_dir --eval-config=/mnt/log_dir/eval-config.yaml

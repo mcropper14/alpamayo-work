@@ -1,0 +1,54 @@
+sbatch benchmark/run_benchmark.sbatch vavam
+sbatch benchmark/run_benchmark.sbatch alpamayo1_5
+simforge_d1_5
+sbatch benchmark/run_benchmark.sbatch simforge_d1_5
+
+
+sbatch benchmark/run_benchmark.sbatch alpamayo1_5
+sbatch benchmark/run_benchmark.sbatch simforge_d1_5
+
+
+export HF_TOKEN=hf_...                         # or: uv run hf auth login
+bash benchmark/download_weights.sh             # Alpamayo 1.5 + SIMFORGE + Qwen configs (~40 GB) → data/hf_cache
+bash benchmark/prepare.sh vavam                # first run also downloads the 8 scenes (~15 GB)
+bash benchmark/prepare.sh alpamayo1_5
+bash benchmark/prepare.sh simforge_d1_5
+sbatch benchmark/run_benchmark.sbatch vavam    # start with VaVAM: it's the fastest, so it checks the setup
+sbatch benchmark/run_benchmark.sbatch alpamayo1_5
+sbatch benchmark/run_benchmark.sbatch simforge_d1_5
+uv run python benchmark/summarize.py  
+
+squeue -u $USER
+
+Qwen3-VL encodes the camera frames inside Alpamayo: whether each image is encoded independently, and whether generate re-encodes images once per trajectory sample.
+This confirms heavy redundancy: with 6 trajectory samples, the vision encoder processes 96 images per step, though only 4 are actually new (one per camera, since 3 of each camera's 4 frames repeat). Next I'll verify the encoder processes each image independently, which is key for exact per-image caching.
+
+I built the visual feature cache as a separate module, visual_cache/, with unit tests, but it hasn't run on the real model yet. The GPU microbenchmark is the next step, and the closed-loop cache runs come after that.
+
+The redundancy it targets: every inference sends 4 cameras × 4 frames to Qwen3-VL, and generate repeats those images once per trajectory sample (6). So the vision encoder runs on 96 images per step, and only 4 of them are new. Qwen3-VL encodes each image independently, so reusing an image's features is exact.
+
+How it works:
+
+Storage (cache.py): keeps each image's encoder output, keyed by a fingerprint of its pixels. The oldest entries are dropped first, and max_entries sets the size limit.
+
+Skipping repeat work (encoder.py): replaces get_image_features on the loaded model. Only images that aren't cached go through the encoder, in one batch. The model's own code is unchanged.
+
+Updating, two strategies:
+
+exact: reuses only identical frames. Lossless.
+near_duplicate: also reuses the closest previously encoded frame when the pixel difference is under a threshold. Each encoded frame can stand in for at most max_near_duplicate_uses others, so features still refresh in a static scene.
+The near-duplicate tests caught a design flaw: the reuse limit didn't actually force a refresh. I fixed it by always comparing new frames against the frame that was actually encoded, so the error is bounded by the threshold.
+
+Config: driver.model.visual_cache.*, off by default. Each inference's cache counts (images encoded and reused) go into latency.jsonl and the summary table.
+
+Tests: 6 new unit tests use a stand-in encoder to check that cached output matches uncached output across a sliding window with repeated samples, that only missing images are encoded, plus eviction and the near-duplicate rules. All 110 fast driver tests pass, and lint is clean. With the cache off, nothing changes for the job you have queued, which is now estimated to start at 21:18.
+
+What to run on the GPU:
+
+
+sbatch benchmark/visual_cache_microbench.sbatch                   # ~15 min: encoder-only latency and accuracy
+sbatch benchmark/run_benchmark.sbatch alpamayo1_5_vcache_exact    # already prepared: closed loop with the cache
+bash benchmark/prepare.sh alpamayo1_5_vcache_neardup              # login node, then sbatch it the same way
+The microbenchmark (visual_cache_microbench.py) loads the real Alpamayo 1.5 encoder. It reports encoder time with and without the cache, images encoded per step, and the largest difference between cached and uncached features. That difference should be only bf16 rounding noise, since GPU kernels can round slightly differently at different batch sizes. It uses random frames, which doesn't matter for exact reuse, so near-duplicate reuse is evaluated in the closed-loop runs.
+
+Expect a modest end-to-end gain. The cache removes only vision-encoder work. FlashDrive's measurements put the encoder at about 87 of 717 ms for Alpamayo 1.5. The language model still processes every visual token during prefill. Reusing that prefill work for unchanged frames would be the larger next gain, but that's the part that overlaps most with FlashDrive's streaming inference. I've noted this in TODO.md, along with how to run the cache-size and update-strategy ablations as extra benchmark runs.

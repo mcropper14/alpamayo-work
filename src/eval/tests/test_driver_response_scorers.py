@@ -114,3 +114,30 @@ def test_driver_response_scorers_use_policy_timestamps(
     assert plan_deviation.values == pytest.approx([0.0, 0.0])
     assert safety.timestamps_us == [0, 200_000, 400_000]
     assert safety.values == [False, True, False]
+
+
+def test_min_ade_skips_time_deltas_beyond_plan_horizon(
+    off_cadence_simulation_result: SimulationResult,
+) -> None:
+    """Plans shorter than the largest time delta only score the deltas they cover."""
+    raabb = RAABB(size_x=4.5, size_y=2.0, size_z=1.5, corner_radius_m=0.0)
+    for (
+        response
+    ) in off_cadence_simulation_result.driver_responses.per_timestep_driver_responses:
+        plan_timestamps = np.arange(
+            response.time_query_us,
+            response.time_query_us + 300_001,
+            100_000,
+            dtype=np.uint64,
+        )
+        response.sampled_trajectories = [_renderable(plan_timestamps, raabb)]
+
+    cfg = create_test_eval_config()
+    cfg.scorers.min_ade.time_deltas = [0.2, 0.5]
+    short_horizon, beyond_horizon = MinADEScorer(cfg).calculate(
+        off_cadence_simulation_result
+    )
+
+    assert short_horizon.timestamps_us == [0, 200_000, 400_000]
+    assert short_horizon.values == pytest.approx([0.0, 0.0, 0.0])
+    assert beyond_horizon.values == []

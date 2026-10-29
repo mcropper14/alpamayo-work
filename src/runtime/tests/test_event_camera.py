@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import numpy as np
 import pytest
-from alpasim_runtime.config import RenderBundling
+from alpasim_runtime.config import PoseConfig, RadarConfig, RenderBundling
 from alpasim_runtime.events.base import EventQueue
 from alpasim_runtime.events.camera import (
     CameraFrameEvent,
@@ -18,6 +19,10 @@ from alpasim_runtime.events.camera import (
 from alpasim_runtime.events.state import RolloutState
 from alpasim_runtime.force_gt_frame_cache import ForceGtFrameCache, ForceGtFrameKey
 from alpasim_runtime.types import Clock, RuntimeCamera
+from alpasim_utils.geometry import Pose, Trajectory
+from alpasim_utils.radar_payload import unpack_radar_scan
+from alpasim_utils.scenario import AABB, TrafficObject, TrafficObjects
+from alpasim_utils.sensor_payload import unpack_sensor_payloads
 from alpasim_utils.types import ImageWithMetadata
 
 
@@ -127,6 +132,84 @@ async def test_bundled_flush_uses_batch_render_when_flag_set(
     mock_sensorsim.aggregated_render.assert_not_awaited()
     await rollout_state.step_context.drain_outstanding_tasks()
     mock_driver.submit_image.assert_awaited_once_with(fake_image)
+
+
+@pytest.mark.asyncio
+async def test_render_lidar_for_driver_forwards_lidar_payload(
+    rollout_state: RolloutState,
+    mock_sensorsim: AsyncMock,
+    mock_driver: AsyncMock,
+):
+    """With render_lidar_for_driver, the flush also renders a LiDAR spin over the
+    camera shutter window and hands it to the driver as renderer data."""
+    rollout_state.unbound.render_bundling = RenderBundling.BATCH_RENDER_RGB
+    rollout_state.unbound.render_lidar_for_driver = True
+    rollout_state.unbound.rig_to_lidar = sentinel_mount = MagicMock()
+    camera = _make_camera("cam_front")
+    trigger = Clock.Trigger(range(0, 33_000), sequential_idx=0)
+    mock_sensorsim.batch_render.return_value = (
+        [MagicMock(spec=ImageWithMetadata)],
+        None,
+    )
+    mock_sensorsim.render_lidar_payload.return_value = b"lidar"
+
+    queue = EventQueue()
+    await CameraFrameEvent(camera, trigger, mock_sensorsim, mock_driver).handle(
+        rollout_state, queue
+    )
+    flush = next(
+        event for event in queue.queue if isinstance(event, CameraRenderFlushEvent)
+    )
+    await flush.handle(rollout_state, queue)
+
+    lidar_kwargs = mock_sensorsim.render_lidar_payload.await_args.kwargs
+    assert lidar_kwargs["trigger"] == trigger
+    assert lidar_kwargs["rig_to_lidar"] is sentinel_mount
+    assert unpack_sensor_payloads(rollout_state.data_sensorsim_to_driver) == {
+        b"lidar": b"lidar"
+    }
+
+
+@pytest.mark.asyncio
+async def test_radars_forward_a_radar_scan_without_lidar(
+    rollout_state: RolloutState,
+    mock_sensorsim: AsyncMock,
+    mock_driver: AsyncMock,
+):
+    """Radars alone produce a sensor payload holding one radar scan at the end
+    of the camera shutter window, and no LiDAR render.  A parked car is seen
+    from its logged pose even though its simulated track is still empty."""
+    rollout_state.unbound.render_bundling = RenderBundling.BATCH_RENDER_RGB
+    rollout_state.unbound.radars = [_front_radar()]
+    logged, simulated = _parked_car(
+        Trajectory.from_poses(
+            timestamps=np.array([0, 50_000], dtype=np.uint64),
+            poses=[Pose(np.array([30.0, 0.0, 0.0], dtype=np.float32), _IDENTITY)] * 2,
+        )
+    ), _parked_car(Trajectory.create_empty())
+    rollout_state.unbound.traffic_objs = TrafficObjects(parked=logged)
+    rollout_state.traffic_objs = TrafficObjects(parked=simulated)
+    camera = _make_camera("cam_front")
+    trigger = Clock.Trigger(range(0, 33_000), sequential_idx=0)
+    mock_sensorsim.batch_render.return_value = (
+        [MagicMock(spec=ImageWithMetadata)],
+        None,
+    )
+
+    queue = EventQueue()
+    await CameraFrameEvent(camera, trigger, mock_sensorsim, mock_driver).handle(
+        rollout_state, queue
+    )
+    flush = next(
+        event for event in queue.queue if isinstance(event, CameraRenderFlushEvent)
+    )
+    await flush.handle(rollout_state, queue)
+
+    mock_sensorsim.render_lidar_payload.assert_not_awaited()
+    payloads = unpack_sensor_payloads(rollout_state.data_sensorsim_to_driver)
+    scan = unpack_radar_scan(payloads[b"RADAR001"])
+    assert scan.timestamp_us == 33_000
+    assert len(scan.xy) == 1
 
 
 @pytest.mark.asyncio
@@ -337,3 +420,27 @@ def test_initial_sensorsim_render_events_skip_first_triggers_outside_rollout(
     )
 
     assert [event.camera.logical_id for event in events] == ["inside", "exact_end"]
+
+
+def _front_radar() -> RadarConfig:
+    return RadarConfig(
+        name="front",
+        rig_to_radar=PoseConfig(
+            translation_m=(4.0, 0.0, 0.5), rotation_xyzw=(0.0, 0.0, 0.0, 1.0)
+        ),
+        max_range_m=200.0,
+        half_fov_deg=10.0,
+    )
+
+
+_IDENTITY = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
+
+
+def _parked_car(trajectory: Trajectory) -> TrafficObject:
+    return TrafficObject(
+        track_id="parked",
+        aabb=AABB(x=4.0, y=2.0, z=1.5),
+        trajectory=trajectory,
+        is_static=True,
+        label_class="automobile",
+    )

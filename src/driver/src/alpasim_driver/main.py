@@ -12,8 +12,10 @@ import pickle
 import queue
 import socket
 import threading
+import time
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib.metadata import version
 from io import BytesIO
 from typing import Any, Callable, cast
@@ -57,12 +59,20 @@ from torchvision.io import decode_jpeg
 import grpc
 
 from .frame_cache import FrameCache
+from .latency import (
+    LATENCY_LOG_NAME,
+    LatencyLog,
+    StageRecorder,
+    gpu_memory_gib,
+    synchronized_now,
+)
 from .models import DriveCommand
 from .models.base import (
     BaseTrajectoryModel,
     CameraImages,
     ModelInputValidationError,
     ModelPrediction,
+    NonFiniteModelOutputError,
     PredictionInput,
 )
 from .models.manual_model import ManualModel
@@ -71,6 +81,7 @@ from .rectification import (
     FthetaToPinholeRectifier,
     build_ftheta_rectifier_for_resolution,
 )
+from .safety_filter import SafetyFilter
 from .schema import DriverConfig, ModelConfig, RectificationTargetConfig
 from .trajectory_optimizer import (
     TrajectoryOptimizer,
@@ -149,6 +160,10 @@ def _rig_est_waypoints_to_local_trajectory(
     return trajectory
 
 
+# Drive requests can carry a full LiDAR spin in ``renderer_data`` (~5 MB for
+# 450k points), above gRPC's 4 MB default.
+MAX_GRPC_MESSAGE_BYTES = 64 * 1024 * 1024
+
 # Unique queue marker instructing the worker thread to flush and exit.
 _SENTINEL_JOB = object()
 
@@ -163,6 +178,9 @@ class DriveJob:
     pose: PoseAtTime | None
     timestamp_us: int
     result: Future[ModelPrediction]
+    enqueued_at: float
+    # Latency breakdown of the inference that served this job, set by the worker.
+    timings: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -192,6 +210,8 @@ class Session:
     # None until the first route arrives, and for scenarios without a route.
     route: Route | None = None
     frames_trail_request_warned: bool = False
+    # Set when ``safety_validator.enabled``.
+    safety_filter: SafetyFilter | None = None
 
     @staticmethod
     def create(
@@ -420,6 +440,24 @@ def log_call(func: Callable) -> Callable:
     return wrapped
 
 
+def _release_traceback_locals(exc: BaseException) -> None:
+    """Drop the frame locals an exception chain keeps alive.
+
+    A failed inference's traceback references the model's activations and KV
+    cache; the exception outlives the batch in the jobs' futures, so without
+    this every failure leaks gigabytes of GPU memory.
+    """
+    seen: set[int] = set()
+    pending: list[BaseException | None] = [exc]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        traceback.clear_frames(current.__traceback__)
+        pending.extend([current.__cause__, current.__context__])
+
+
 def _create_model(
     cfg: ModelConfig,
     device: torch.device,
@@ -486,6 +524,11 @@ class EgoDriverService(EgodriverServiceServicer):
             output_frequency_hz=cfg.inference.output_frequency_hz,
         )
 
+        self._stage_recorder = StageRecorder(self._device)
+        self._model.install_stage_timing(self._stage_recorder)
+        self._latency_log = LatencyLog(os.path.join(cfg.output_dir, LATENCY_LOG_NAME))
+        self._inference_index = 0
+
         decode_device = cfg.model.image_decode_device
         if decode_device not in ("cpu", "cuda"):
             raise ValueError(
@@ -510,6 +553,12 @@ class EgoDriverService(EgodriverServiceServicer):
             self._model.num_cameras,
             self._context_length,
         )
+
+        # Serializes nvJPEG decoding (gRPC threads) with inference (worker
+        # thread).  Decoding concurrently with inference corrupted the model's
+        # activations: degenerate reasoning, then NaN logits, in every rollout
+        # that started while others were mid-inference.
+        self._gpu_lock = threading.Lock()
 
         self._max_batch_size = cfg.inference.max_batch_size
         self._job_queue: queue.Queue[DriveJob | object] = queue.Queue()
@@ -565,6 +614,7 @@ class EgoDriverService(EgodriverServiceServicer):
                 self._job_queue.put_nowait(_SENTINEL_JOB)
         if self._worker_thread.is_alive():
             self._worker_thread.join()
+        self._latency_log.close()
 
     def _worker_main(self) -> None:
         """Blocking worker loop that batches drive jobs for inference."""
@@ -601,7 +651,8 @@ class EgoDriverService(EgodriverServiceServicer):
 
             try:
                 logger.debug("Running inference batch of size %s", len(batch))
-                responses = self._run_batch(batch)
+                with self._gpu_lock:
+                    responses = self._run_batch(batch)
                 batch_count += 1
                 total_items += len(batch)
                 if batch_count % 100 == 0:
@@ -613,6 +664,7 @@ class EgoDriverService(EgodriverServiceServicer):
                     )
             except Exception as exc:
                 logger.exception("Inference batch failed")
+                _release_traceback_locals(exc)
                 for pending_job in batch:
                     pending_job.result.set_exception(exc)
             else:
@@ -707,6 +759,7 @@ class EgoDriverService(EgodriverServiceServicer):
         Builds a PredictionInput per job and delegates to predict_batch(),
         which models can override for GPU-level batching.
         """
+        batch_start = synchronized_now(self._device)
         inputs = []
         for job in batch:
             speed, acceleration = self._get_speed_and_acceleration(job.session)
@@ -727,7 +780,34 @@ class EgoDriverService(EgodriverServiceServicer):
                 )
             )
 
-        predictions = self._model.predict_batch(inputs)
+        self._stage_recorder.reset()
+        inference_start = synchronized_now(self._device)
+        try:
+            predictions = self._model.predict_batch(inputs)
+        except NonFiniteModelOutputError:
+            self._save_nonfinite_inputs(batch, inputs)
+            raise
+        inference_end = synchronized_now(self._device)
+
+        timings = {
+            "inference_index": float(self._inference_index),
+            "batch_size": float(len(batch)),
+            "input_prep_ms": (inference_start - batch_start) * 1e3,
+            "inference_ms": (inference_end - inference_start) * 1e3,
+        }
+        # Stage hooks timestamp one inference at a time.
+        if len(batch) == 1:
+            timings.update(
+                self._stage_recorder.current.stage_durations_ms(
+                    inference_start, inference_end
+                )
+            )
+        self._inference_index += 1
+        for job in batch:
+            job.timings = {
+                **timings,
+                "queue_wait_ms": (batch_start - job.enqueued_at) * 1e3,
+            }
 
         for job, prediction in zip(batch, predictions, strict=True):
             # Carry the plan into the next inference of this session so the model
@@ -735,6 +815,36 @@ class EgoDriverService(EgodriverServiceServicer):
             job.session.last_selected_plan = prediction.selected_plan
 
         return predictions
+
+    def _save_nonfinite_inputs(
+        self, batch: list[DriveJob], inputs: list[PredictionInput]
+    ) -> None:
+        """Save the inputs of an inference that produced NaN/inf for replay."""
+        dump_dir = os.path.join(self._cfg.output_dir, "nonfinite_inputs")
+        os.makedirs(dump_dir, exist_ok=True)
+        path = os.path.join(
+            dump_dir, f"{batch[0].session_id}_{batch[0].timestamp_us}.pt"
+        )
+        torch.save(
+            {
+                "scene_ids": [job.session.debug_scene_id for job in batch],
+                "inputs": [
+                    replace(
+                        prediction_input,
+                        camera_images={
+                            camera: [
+                                (timestamp_us, torch.as_tensor(image).cpu())
+                                for timestamp_us, image in frames
+                            ]
+                            for camera, frames in prediction_input.camera_images.items()
+                        },
+                    )
+                    for prediction_input in inputs
+                ],
+            },
+            path,
+        )
+        logger.error("Non-finite model output; inputs saved to %s", path)
 
     def _warn_once_if_frames_trail_request(
         self, job: DriveJob, camera_images: CameraImages
@@ -795,6 +905,10 @@ class EgoDriverService(EgodriverServiceServicer):
                 self._context_length,
                 subsample_factor=self._cfg.inference.subsample_factor,
             )
+            if self._cfg.safety_validator.enabled:
+                session.safety_filter = SafetyFilter(
+                    self._cfg.safety_validator, self._model.output_frequency_hz
+                )
             self._sessions[request.session_uuid] = session
 
         return SessionRequestStatus()
@@ -834,7 +948,8 @@ class EgoDriverService(EgodriverServiceServicer):
             buffer = torch.frombuffer(
                 bytearray(grpc_image.image_bytes), dtype=torch.uint8
             )
-            frame = decode_jpeg(buffer, device=self._device).permute(1, 2, 0)
+            with self._gpu_lock:
+                frame = decode_jpeg(buffer, device=self._device).permute(1, 2, 0)
         else:
             image = Image.open(BytesIO(grpc_image.image_bytes))
             frame = np.array(session.rectify_image(grpc_image.logical_id, image))
@@ -918,6 +1033,7 @@ class EgoDriverService(EgodriverServiceServicer):
     def drive(
         self, request: DriveRequest, context: grpc.ServicerContext
     ) -> DriveResponse:
+        rpc_start = time.perf_counter()
         session = self._sessions[request.session_uuid]
 
         if not self._check_frames_ready(session):
@@ -960,6 +1076,7 @@ class EgoDriverService(EgodriverServiceServicer):
             pose=pose_snapshot,
             timestamp_us=request.time_now_us,
             result=future,
+            enqueued_at=time.perf_counter(),
         )
         with self._worker_lifecycle_lock:
             if self._worker_stop.is_set():
@@ -979,6 +1096,21 @@ class EgoDriverService(EgodriverServiceServicer):
                 context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
             raise
 
+        safety_debug: dict | None = None
+        safety_log: dict = {}
+        if session.safety_filter is not None:
+            speed, _ = self._get_speed_and_acceleration(session)
+            safety_start = time.perf_counter()
+            model_index = prediction.selected_index
+            prediction, safety_debug = session.safety_filter.apply(
+                prediction, request.renderer_data, speed
+            )
+            safety_log = {
+                "safety_ms": (time.perf_counter() - safety_start) * 1e3,
+                "safety_reason": safety_debug["reason"],
+                "safety_switched_candidate": prediction.selected_index != model_index,
+            }
+
         # Convert model prediction to Alpasim trajectory format
         alpasim_traj: Trajectory = self._convert_prediction_to_alpasim_trajectory(
             prediction, job.pose, job.timestamp_us
@@ -997,6 +1129,8 @@ class EgoDriverService(EgodriverServiceServicer):
             "trajectory_points": len(alpasim_traj.poses),
             "reasoning_text": reasoning_text,
         }
+        if safety_debug is not None:
+            debug_data["safety_validator"] = safety_debug
         debug_info = DriveResponse.DebugInfo(
             unstructured_debug_info=pickle.dumps(debug_data),
             sampled_trajectories=self._sampled_alpasim_trajectories(
@@ -1004,6 +1138,18 @@ class EgoDriverService(EgodriverServiceServicer):
             ),
         )
         response = DriveResponse(trajectory=alpasim_traj, debug_info=debug_info)
+
+        self._latency_log.write(
+            {
+                "session_uuid": request.session_uuid,
+                "scene_id": session.debug_scene_id,
+                "time_now_us": request.time_now_us,
+                "rpc_ms": (time.perf_counter() - rpc_start) * 1e3,
+                **job.timings,
+                **safety_log,
+                **gpu_memory_gib(self._device),
+            }
+        )
 
         logger.debug("Returning drive response at time %s", request.time_now_us)
         return response
@@ -1150,7 +1296,10 @@ def serve(cfg: DriverConfig, ready_event: threading.Event | None = None) -> None
         ready_event: Optional event to signal when the service is initialized.
             Used when the server runs in a background thread (GUI mode).
     """
-    server = grpc.server(ThreadPoolExecutor())
+    server = grpc.server(
+        ThreadPoolExecutor(),
+        options=[("grpc.max_receive_message_length", MAX_GRPC_MESSAGE_BYTES)],
+    )
 
     service = EgoDriverService(cfg=cfg)
     add_EgodriverServiceServicer_to_server(service, server)

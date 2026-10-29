@@ -15,6 +15,8 @@ import torch
 from alpasim_utils.geometry import Pose, Trajectory
 from PIL import Image
 
+from ..latency import StageRecorder
+
 
 class DriveCommand(IntEnum):
     """Canonical driving command representation.
@@ -136,6 +138,10 @@ class ModelPrediction:
 
 class ModelInputValidationError(ValueError):
     """Raised when model inputs fail a precondition checked before inference."""
+
+
+class NonFiniteModelOutputError(RuntimeError):
+    """Raised when a model stage produces NaN or inf values."""
 
 
 class BaseTrajectoryModel(ABC):
@@ -310,6 +316,12 @@ class BaseTrajectoryModel(ABC):
                 or list lengths are wrong.
         """
         pass
+
+    def install_stage_timing(self, recorder: StageRecorder) -> None:
+        """Register hooks that timestamp model stages into ``recorder``.
+
+        Models without stage hooks only report total inference latency.
+        """
 
     def predict_batch(
         self, prediction_inputs: list[PredictionInput]

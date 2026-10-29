@@ -1,0 +1,30 @@
+13:28:59.892 INFO:	Loaded controller config from /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu/controller-config.yaml
+13:28:59.897 INFO:	VDCServicer initialized logging to: /ocean/projects/cis260312p/mcropper/Documents/alpasim/test_vavam_gpu
+13:28:59.897 INFO:	SystemManager using nonlinear MPC (n_horizon=20, dt_mpc=0.1000)
+13:28:59.906 INFO:	Starting server on 0.0.0.0:6008
+13:28:59.912 INFO:	Server started
+13:31:05.818 INFO:	start_session for session_uuid: 57c7be6e-c019-11f1-ae21-e53270797194
+13:31:05.818 INFO:	Registering session: 57c7be6e-c019-11f1-ae21-e53270797194
+13:31:47.335 INFO:	Creating system for session_uuid: 57c7be6e-c019-11f1-ae21-e53270797194 (mpc: nonlinear)
+/ocean/projects/cis260312p/mcropper/Documents/alpasim/.venv/lib/python3.12/site-packages/casadi/casadi.py:913: FutureWarning: 
+casadi: a numpy function was called on a casadi value (issue #2959).
+This used legacy casadi 3.7.2 behaviour, where the result type follows
+the input:
+  - a numeric input (DM)       -> a plain numpy array
+  - a symbolic input (SX / MX) -> a casadi value, or an error if the
+                                  function has no casadi equivalent
+
+For a shape-correct, type-preserving result, opt in to the
+casadi-aware numpy support:
+
+    try:
+        ca.GlobalOptions.setNumpyMode(1)
+    except AttributeError:
+        pass
+
+Or use setNumpyMode(-1) to keep legacy behaviour silently.
+Shown once; run python with -W always to see every occurrence.
+
+  _w.warn(_NUMPY_LEGACY_NOTICE, FutureWarning)
+13:32:44.868 INFO:	close_session for session_uuid: 57c7be6e-c019-11f1-ae21-e53270797194
+13:32:44.868 INFO:	Closing session: 57c7be6e-c019-11f1-ae21-e53270797194

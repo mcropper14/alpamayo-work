@@ -8,12 +8,13 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from alpasim_grpc.v0.logging_pb2 import RolloutMetadata
 from alpasim_runtime.config import (
     PhysicsUpdateMode,
+    RadarConfig,
     RenderBundling,
     RouteGeneratorType,
     RuntimeCameraConfig,
@@ -62,6 +63,25 @@ def get_ds_rig_to_aabb_center_transform(vehicle_config: VehicleConfig) -> Pose:
         ds_rig_to_aabb_center,
         np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32),
     )
+
+
+def _resolve_rig_to_lidar(
+    simulation_config: SimulationConfig, rig: Rig, scene_id: str
+) -> Pose:
+    """LiDAR pose in the rig frame: the config override, else the scene's calibration."""
+    override = simulation_config.rig_to_lidar
+    if override is not None:
+        return Pose(
+            np.asarray(override.translation_m, dtype=np.float32),
+            np.asarray(override.rotation_xyzw, dtype=np.float32),
+        )
+    if rig.rig_to_lidar is None:
+        raise InvalidSceneError(
+            scene_id,
+            "render_lidar_for_driver needs a LiDAR pose, but the scene has no "
+            "LiDAR calibration and simulation_config.rig_to_lidar is not set",
+        )
+    return rig.rig_to_lidar
 
 
 def _build_rollout_timing(
@@ -210,6 +230,10 @@ class UnboundRollout:
     hidden_traffic_objs: TrafficObjects | None = None
 
     render_bundling: RenderBundling = RenderBundling.NONE
+    render_lidar_for_driver: bool = False
+    # Set iff ``render_lidar_for_driver``.
+    rig_to_lidar: Pose | None = None
+    radars: list[RadarConfig] = field(default_factory=list)
 
     # Session seed shared by this rollout's driver and traffic sessions;
     # 0 ⇒ each service picks a random one (today's behaviour).
@@ -370,6 +394,13 @@ class UnboundRollout:
             vector_map=vector_map,
             hidden_traffic_objs=hidden_traffic_objs,
             render_bundling=simulation_config.render_bundling,
+            render_lidar_for_driver=simulation_config.render_lidar_for_driver,
+            rig_to_lidar=(
+                _resolve_rig_to_lidar(simulation_config, rig, scene_id)
+                if simulation_config.render_lidar_for_driver
+                else None
+            ),
+            radars=list(simulation_config.radars),
         )
 
     def get_log_metadata(self) -> RolloutMetadata.SessionMetadata:

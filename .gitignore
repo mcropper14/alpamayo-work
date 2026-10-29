@@ -43,3 +43,15 @@ asset_harvesting/
 /*.log
 /plugins/internal/src/tools/rollout_viewer/rollout_viewer_data/
 /plugins/internal/src/tools/rollout_viewer/**/*.log
+
+# Large local data and run output (re-downloadable / regenerable)
+data/hf_cache/
+containers/
+benchmark/runs/
+benchmark/smoke_runs/
+benchmark/failed_runs/
+benchmark/logs/
+vavam_*.err
+vavam_*.log
+tutorial/
+tutorial_2/

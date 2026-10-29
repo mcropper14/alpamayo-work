@@ -1,0 +1,20 @@
+13:28:59.190 INFO:	Identifying as
+version_id: "0.2.0"
+git_hash: "<TODO>"
+grpc_api_version {
+  minor: 55
+}
+
+13:28:59.888 INFO:	Available scenes: ['clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6'].
+13:28:59.906 INFO:	Serving on 0.0.0.0:6007
+13:30:33.715 INFO:	get_version
+13:30:33.841 INFO:	get_available_scenes
+13:31:05.893 INFO:	Cache miss, loading artifact.scene_id='clipgt-02eadd92-02f1-46d8-86fe-a9e338fed0b6'
+Warp 1.17.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.3
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA L40S" (44 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /jet/home/mcropper/.cache/warp/1.17.0
+Module alpasim_physics.backend 210588f load on device 'cuda:0' took 7.37 ms  (cached)

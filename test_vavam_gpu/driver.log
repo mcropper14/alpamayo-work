@@ -1,0 +1,9 @@
+[2026-10-04 13:30:09,749][alpasim_driver.models.vam_model][INFO] - Loading VAM checkpoint from /ocean/projects/cis260312p/mcropper/Documents/alpasim/data/drivers/vavam/VAM_width_1024_pretrained_139k.pt
+number of non-embedding parameters: 318.77M
+[2026-10-04 13:30:13,803][vam.action_expert.video_action_model][INFO] - [rank: 0] Initializing GPT2 from scratch, with mup None
+number of non-embedding parameters: 37.95M
+[2026-10-04 13:30:16,285][vam.action_expert.video_action_model][INFO] - [rank: 0] Initializing Action Expert from scratch, with mup None
+[2026-10-04 13:30:21,068][__main__][INFO] - Initialized vam model with 1 cameras, context_length=1
+[2026-10-04 13:30:21,072][__main__][INFO] - Starting vam driver on 0.0.0.0:6005 (external IP: 10.8.3.171:6005)
+[2026-10-04 13:31:05,820][__main__][INFO] - Starting vam session 57c7be6e-c019-11f1-ae21-e53270797194
+[2026-10-04 13:32:44,867][__main__][INFO] - Closing session 57c7be6e-c019-11f1-ae21-e53270797194

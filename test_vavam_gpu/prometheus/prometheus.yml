@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+rule_files:
+  - /mnt/log_dir/prometheus/rules/*.yml
+scrape_configs:
+  - job_name: alpasim
+    file_sd_configs:
+      - files:
+          - /mnt/log_dir/prometheus/targets/*.json
+        refresh_interval: 5s

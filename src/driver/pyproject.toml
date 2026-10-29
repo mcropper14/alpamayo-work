@@ -28,6 +28,7 @@ dependencies = [
   "pygame>=2.5.0", # manual driving
   "alpasim_utils[geometry]",
   "alpamayo2_super",
+  "physical-ai-av-lidar",
 ]
 
 [project.optional-dependencies]
@@ -55,3 +56,4 @@ alpamayo2_super = { git = "https://github.com/NVlabs/alpamayo2.git" }
 alpasim-grpc = { workspace = true }
 alpasim_utils = { workspace = true }
 alpasim_plugins = { workspace = true }
+physical-ai-av-lidar = { workspace = true }

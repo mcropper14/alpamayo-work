@@ -1,0 +1,40 @@
+{
+  "process_names": [
+    {
+      "name": "runtime",
+      "cmdline": [
+        "alpasim_runtime.simulate"
+      ]
+    },
+    {
+      "name": "driver",
+      "cmdline": [
+        "alpasim_driver"
+      ]
+    },
+    {
+      "name": "renderer",
+      "cmdline": [
+        "pycena|nre|sensorsim"
+      ]
+    },
+    {
+      "name": "physics",
+      "cmdline": [
+        "physics_server"
+      ]
+    },
+    {
+      "name": "trafficsim",
+      "cmdline": [
+        "trafficsim"
+      ]
+    },
+    {
+      "name": "controller",
+      "cmdline": [
+        "alpasim_controller.server"
+      ]
+    }
+  ]
+}

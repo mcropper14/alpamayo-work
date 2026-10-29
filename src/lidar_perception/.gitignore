@@ -1,0 +1,63 @@
+# ── HuggingFace dataset cache ──────────────────────────────────────────────
+# The dataset is ~19GB per chunk — never commit any of it
+cache/
+.cache/
+datasets--*/
+snapshots/
+*.parquet
+*.zip
+*.mp4
+
+# Extracted pipeline outputs
+*.lidar_top_360fov.parquet
+*.egomotion.parquet
+*.camera_*.mp4
+clip_chunk_index.json
+
+# Viewer output HTML (can be large with embedded frames)
+viewer*.html
+*.viewer.html
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.conda/
+*.conda/
+
+# ── Testing & coverage ────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Secrets ───────────────────────────────────────────────────────────────
+.env
+*.env
+
+# random test files
+filepath_test.py
+data_inspect.py
+get_clip_id.py
+run_example.py

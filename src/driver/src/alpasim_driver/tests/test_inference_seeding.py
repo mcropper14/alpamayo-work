@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+from ..latency import StageRecorder
 from ..main import DriveJob, EgoDriverService
 from ..models.alpamayo1_5_model import Alpamayo15Model
 from ..models.alpamayo1_model import Alpamayo1Model
@@ -34,12 +35,16 @@ def _drive_job(session: SimpleNamespace) -> DriveJob:
         pose=None,
         timestamp_us=0,
         result=None,  # type: ignore[arg-type]
+        enqueued_at=0.0,
     )
 
 
 def test_run_batch_assigns_consecutive_per_session_inference_seeds() -> None:
     service = EgoDriverService.__new__(EgoDriverService)
     service._model = _CapturingModel()
+    service._device = torch.device("cpu")
+    service._stage_recorder = StageRecorder(service._device)
+    service._inference_index = 0
     service._get_speed_and_acceleration = lambda session: (0.0, 0.0)
     service._prepare_camera_images = lambda session: {}
     session = SimpleNamespace(

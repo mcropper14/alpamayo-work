@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import torch
+from alpasim_driver.latency import StageRecorder
 from alpasim_driver.main import DriveJob, EgoDriverService
 from alpasim_driver.models.base import DriveCommand, ModelPrediction, PredictionInput
 from alpasim_driver.models.trajectory_selection import (
@@ -273,6 +275,9 @@ class TestSessionPlanHandoff:
         service = EgoDriverService.__new__(EgoDriverService)
         model = self._PlanningModel()
         service._model = model
+        service._device = torch.device("cpu")
+        service._stage_recorder = StageRecorder(service._device)
+        service._inference_index = 0
         service._get_speed_and_acceleration = lambda session: (0.0, 0.0)
         service._prepare_camera_images = lambda session: {}
         session = SimpleNamespace(
@@ -292,6 +297,7 @@ class TestSessionPlanHandoff:
                 pose=None,
                 timestamp_us=0,
                 result=None,  # type: ignore[arg-type]
+                enqueued_at=0.0,
             )
 
         service._run_batch([_job()])

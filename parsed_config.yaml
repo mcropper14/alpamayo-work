@@ -1,0 +1,16 @@
+scene_id: "clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e"
+scenario_id: "clipgt-c14c031a-8c17-4d08-aa4d-23c020a6871e"
+duration_s: 10.0
+dt_s: 0.1
+ego_vehicle:
+  model: "default"
+  initial_pose:
+    translation: [0.0, 0.0, 0.0]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+  initial_velocity_mps: 5.0
+actors: []
+traffic_lights: []
+sensors:
+  cameras:
+    - logical_id: "camera_front_wide_120fov"
+      fps: 10

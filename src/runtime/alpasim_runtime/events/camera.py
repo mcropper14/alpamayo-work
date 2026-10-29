@@ -5,19 +5,25 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
+import numpy as np
 from alpasim_grpc.v0.sensorsim_pb2 import ImageFormat
 from alpasim_runtime.broadcaster import MessageBroadcaster
 from alpasim_runtime.config import RenderBundling
 from alpasim_runtime.events.base import Event, EventPriority, EventQueue
 from alpasim_runtime.events.state import RolloutState
 from alpasim_runtime.force_gt_frame_cache import ForceGtFrameKey
+from alpasim_runtime.radar import simulate_radar_scan
 from alpasim_runtime.services.driver_service import DriverService
 from alpasim_runtime.services.sensorsim_service import SensorsimService
 from alpasim_runtime.types import Clock, RuntimeCamera
 from alpasim_utils import geometry
+from alpasim_utils.radar_payload import pack_radar_scan
+from alpasim_utils.scenario import TrafficObjects
+from alpasim_utils.sensor_payload import pack_sensor_payloads
 from alpasim_utils.types import ImageWithMetadata
 
 logger = logging.getLogger(__name__)
@@ -63,6 +69,67 @@ def _traffic_trajectories(state: RolloutState) -> dict[str, geometry.Trajectory]
 
 
 async def _render_frames(
+    state: RolloutState,
+    sensorsim: SensorsimService,
+    camera_triggers: list[tuple[RuntimeCamera, Clock.Trigger]],
+) -> tuple[list[ImageWithMetadata], bytes | None]:
+    """Render a group of camera frames plus the driver's sensor payload.
+
+    The payload is a ``SENSORS1`` container with a LiDAR spin over the first
+    camera's shutter window (``render_lidar_for_driver``) and a simulated radar
+    scan at its end (``radars``).
+    """
+    unbound = state.unbound
+    if not unbound.render_lidar_for_driver and not unbound.radars:
+        return await _render_camera_frames(state, sensorsim, camera_triggers)
+    trigger = camera_triggers[0][1]
+
+    payloads: list[bytes] = []
+    if unbound.render_lidar_for_driver:
+        rig_to_lidar = unbound.rig_to_lidar
+        assert rig_to_lidar is not None, "set by UnboundRollout.create"
+        (images, renderer_driver_data), lidar_payload = await asyncio.gather(
+            _render_camera_frames(state, sensorsim, camera_triggers),
+            sensorsim.render_lidar_payload(
+                ego_trajectory=state.ego_trajectory,
+                traffic_trajectories=_traffic_trajectories(state),
+                trigger=trigger,
+                scene_id=unbound.scene_id,
+                rig_to_lidar=rig_to_lidar,
+            ),
+        )
+        payloads.append(lidar_payload)
+    else:
+        images, renderer_driver_data = await _render_camera_frames(
+            state, sensorsim, camera_triggers
+        )
+    if renderer_driver_data:
+        raise ValueError(
+            "render_lidar_for_driver / radars cannot be combined with a renderer "
+            "that already sends driver data"
+        )
+
+    if unbound.radars:
+        time_us = trigger.time_range_us.stop
+        # Moving actors as simulated so far; static actors (baked into the
+        # scene, so always present) from the log, as their simulated tracks
+        # are empty until the actor's recorded window begins.
+        actors = TrafficObjects(
+            **{k: o for k, o in unbound.traffic_objs.items() if o.is_static},
+            **{k: o for k, o in state.traffic_objs.items() if not o.is_static},
+        )
+        scan = simulate_radar_scan(
+            unbound.radars,
+            state.ego_trajectory,
+            actors,
+            time_us,
+            np.random.default_rng([unbound.session_seed, time_us]),
+        )
+        payloads.append(pack_radar_scan(scan))
+    return images, pack_sensor_payloads(payloads)
+
+
+async def _render_camera_frames(
     state: RolloutState,
     sensorsim: SensorsimService,
     camera_triggers: list[tuple[RuntimeCamera, Clock.Trigger]],

@@ -1,0 +1,10 @@
+# Dev scene set: 8 scenes sampled from test suite public_2601 with
+# polars DataFrame.sample(n=8, seed=0) over data/scenes/sim_suites.csv.
+clipgt-518b91d7-c8d7-4863-92b8-c59caa8128ad
+clipgt-61106668-1a33-4ca1-9e64-4041381a37f4
+clipgt-5c1b7555-64fa-4ae4-98bf-4cf24e6de0a4
+clipgt-0499fb41-122d-4180-83af-f954a9974d3b
+clipgt-7cd29a50-39b9-40d3-8ab5-d75a7efe7bc1
+clipgt-060131e7-ee72-477c-89da-083e0b446566
+clipgt-d9c2a88b-dd8c-479a-bb23-1e6479315f29
+clipgt-d68c7161-bef6-4342-800f-607127417825

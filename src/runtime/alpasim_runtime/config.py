@@ -182,6 +182,21 @@ class PoseConfig:
 
 
 @dataclass
+class RadarConfig:
+    """One simulated radar; see ``alpasim_runtime.radar`` for the sensor model."""
+
+    name: str = MISSING
+    rig_to_radar: PoseConfig = MISSING  # radar pose in the rig frame
+    max_range_m: float = MISSING
+    half_fov_deg: float = MISSING  # azimuth half-angle of the field of view
+    range_noise_m: float = 0.15  # 1-sigma
+    azimuth_noise_deg: float = 0.3  # 1-sigma
+    range_rate_noise_mps: float = 0.1  # 1-sigma
+    detection_probability: float = 0.95  # per actor per scan
+    false_alarms_per_scan: float = 0.0  # mean of a Poisson count of static clutter
+
+
+@dataclass
 class OpenCVPinholeConfig:
     """OpenCV pinhole parameters (matches sensorsim OpenCVPinholeCameraParam)."""
 
@@ -353,6 +368,17 @@ class SimulationConfig:
 
     # Which sensorsim bundled-render RPC to use (NONE = one render_rgb per camera).
     render_bundling: RenderBundling = RenderBundling.NONE
+
+    # Render one LiDAR spin per camera render and forward it to the driver as
+    # ``DriveRequest.renderer_data`` (see ``alpasim_utils.lidar_payload``).
+    # Needed by the driver's ``safety_validator``.
+    render_lidar_for_driver: bool = False
+    # LiDAR pose in the rig frame for ``render_lidar_for_driver``.  None uses the
+    # scene's recorded LiDAR calibration (``T_sensor_rig``).
+    rig_to_lidar: PoseConfig | None = None
+    # Radars simulated from ground-truth traffic, one scan per LiDAR/camera
+    # render, forwarded with the LiDAR spin.  Empty disables radar.
+    radars: list[RadarConfig] = field(default_factory=list)
 
 
 @dataclass

@@ -181,6 +181,10 @@ def mock_unbound(simple_trajectory: Trajectory) -> MagicMock:
     unbound.planner_delay_us = 0
     unbound.send_recording_ground_truth = False
     unbound.render_bundling = RenderBundling.NONE
+    unbound.render_lidar_for_driver = False
+    unbound.rig_to_lidar = None
+    unbound.radars = []
+    unbound.session_seed = 0
     unbound.route_generator_type = "NONE"
     unbound.route_start_offset_m = 0.0
     unbound.physics_update_mode = PhysicsUpdateMode.NONE

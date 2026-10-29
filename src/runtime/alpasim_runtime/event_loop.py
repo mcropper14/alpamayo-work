@@ -10,6 +10,7 @@ queue, allowing each one to run at its own cadence.
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import time
@@ -84,6 +85,32 @@ def _build_traffic_session_trajectory(unbound: UnboundRollout) -> geometry.Traje
 def _simulated_duration_us(unbound: UnboundRollout) -> int:
     """Return the effective simulated span covered by this rollout."""
     return unbound.end_timestamp_us - unbound.egomotion_context_start_us
+
+
+ROLLOUT_TIMING_FILE_NAME = "timing.json"
+
+
+def _write_rollout_timing(
+    rollout_dir: str,
+    *,
+    n_sim_steps: int,
+    simulated_duration_s: float,
+    loop_duration_s: float,
+    rollout_duration_s: float,
+) -> None:
+    """Write wall-clock timing of a finished rollout for throughput benchmarks."""
+    timing = {
+        "n_sim_steps": n_sim_steps,
+        "simulated_duration_s": simulated_duration_s,
+        "loop_duration_s": loop_duration_s,
+        "rollout_duration_s": rollout_duration_s,
+        "sim_steps_per_s": n_sim_steps / loop_duration_s,
+        "realtime_ratio": simulated_duration_s / loop_duration_s,
+    }
+    with open(
+        os.path.join(rollout_dir, ROLLOUT_TIMING_FILE_NAME), "w", encoding="utf-8"
+    ) as f:
+        json.dump(timing, f, indent=2)
 
 
 @dataclass
@@ -671,6 +698,13 @@ class EventBasedRollout:
                 loop_duration,
                 realtime_ratio,
                 rollout_duration,
+            )
+            _write_rollout_timing(
+                os.path.join(self.unbound.save_path_root, self.unbound.rollout_uuid),
+                n_sim_steps=self.unbound.n_sim_steps,
+                simulated_duration_s=simulated_duration_s,
+                loop_duration_s=loop_duration,
+                rollout_duration_s=rollout_duration,
             )
 
         return eval_result
