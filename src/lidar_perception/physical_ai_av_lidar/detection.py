@@ -21,7 +21,7 @@ from enum import Enum
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy.sparse import coo_matrix
+from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
@@ -276,7 +276,10 @@ def _dbscan_cluster(xyz: np.ndarray, eps: float, min_pts: int) -> np.ndarray:
     if n == 0:
         return np.array([], dtype=np.int32)
 
-    pairs = cKDTree(xyz[:, :3]).query_pairs(eps, output_type="ndarray")
+    # An unbalanced, non-compacted tree builds several times faster and the
+    # pair query on it is no slower for voxelized clouds.
+    tree = cKDTree(xyz[:, :3], balanced_tree=False, compact_nodes=False)
+    pairs = tree.query_pairs(eps, output_type="ndarray").astype(np.int32)
     n_neighbours = 1 + np.bincount(pairs.ravel(), minlength=n)
     core = n_neighbours >= min_pts
 
@@ -285,17 +288,24 @@ def _dbscan_cluster(xyz: np.ndarray, eps: float, min_pts: int) -> np.ndarray:
     if len(core_idx) == 0:
         return labels
 
-    core_pairs = pairs[core[pairs[:, 0]] & core[pairs[:, 1]]]
-    graph = coo_matrix(
-        (np.ones(len(core_pairs), dtype=np.int8), (core_pairs[:, 0], core_pairs[:, 1])),
-        shape=(n, n),
+    a_core = core[pairs[:, 0]]
+    b_core = core[pairs[:, 1]]
+    # Connected components over the core points only, renumbered 0..n_core-1.
+    core_number = np.full(n, -1, dtype=np.int32)
+    core_number[core_idx] = np.arange(len(core_idx), dtype=np.int32)
+    core_pairs = pairs[a_core & b_core]
+    graph = csr_matrix(
+        (
+            np.ones(len(core_pairs), dtype=np.int8),
+            (core_number[core_pairs[:, 0]], core_number[core_pairs[:, 1]]),
+        ),
+        shape=(len(core_idx), len(core_idx)),
     )
     _, component = connected_components(graph, directed=False)
-    _, labels[core_idx] = np.unique(component[core_idx], return_inverse=True)
+    _, labels[core_idx] = np.unique(component, return_inverse=True)
 
     # Border points: one endpoint core, the other not.
-    for a, b in ((0, 1), (1, 0)):
-        border = core[pairs[:, a]] & ~core[pairs[:, b]]
+    for border, a, b in ((a_core & ~b_core, 0, 1), (b_core & ~a_core, 1, 0)):
         labels[pairs[border, b]] = labels[pairs[border, a]]
     return labels
 

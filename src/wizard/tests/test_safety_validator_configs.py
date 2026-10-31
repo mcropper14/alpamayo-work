@@ -36,3 +36,25 @@ def test_radar_preset_adds_radars_on_top_of_lidar_preset() -> None:
         "front_mid_range",
     ]
     assert cfg.driver.safety_validator.enabled is True
+
+
+def test_weather_presets_combine_adaptive_safety_and_scene_weather() -> None:
+    cfg = _compose_config(
+        "+exp/sim=safety_validator_weather", "+exp/weather=dev_scenes"
+    )
+
+    simulation_config = cfg.runtime.simulation_config
+    assert simulation_config.render_lidar_for_driver is True
+    assert len(simulation_config.radars) == 2
+    assert cfg.driver.weather.enabled is True
+    assert (
+        simulation_config.scene_weather["clipgt-5c1b7555-64fa-4ae4-98bf-4cf24e6de0a4"]
+        == "rain"
+    )
+
+
+def test_scenario_labels_combine_with_weather_adaptive_safety() -> None:
+    cfg = _compose_config("+exp/sim=safety_validator_weather", "+exp/labels=scenario")
+
+    assert cfg.driver.weather.enabled is True
+    assert cfg.driver.scenario.enabled is True

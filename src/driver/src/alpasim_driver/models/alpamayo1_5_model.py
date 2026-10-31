@@ -22,6 +22,7 @@ from .alpamayo_base import (
     AlpamayoBaseModel,
     configure_deterministic_runtime,
 )
+from .base import CameraFrame
 from .trajectory_selection import TrajectorySelectionStrategy
 
 logger = logging.getLogger(__name__)
@@ -187,3 +188,63 @@ class Alpamayo15Model(AlpamayoBaseModel):
             },
             return_extra=True,
         )
+
+    def classify(
+        self,
+        camera_id: str,
+        frame: CameraFrame,
+        question: str,
+        labels: tuple[str, ...],
+    ) -> dict[str, float]:
+        """Score each label as the answer to a VQA question about the frame.
+
+        Uses the checkpoint's VQA format (``helper.create_vqa_message``) on the
+        one frame, and compares the likelihood of each complete answer
+        ``"<label><|answer_end|>"`` instead of sampling free text, so the result
+        is deterministic and always one of ``labels``.
+        """
+        image = torch.as_tensor(frame.image).permute(2, 0, 1)[None]  # (1, C, H, W)
+        messages = helper.create_vqa_message(
+            image,
+            question,
+            camera_indices=torch.tensor([CAMERA_NAME_TO_INDEX[camera_id]]),
+            num_frames_per_camera=1,
+        )
+        prompt = self._helper.to_device(
+            self._processor.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=False,
+                continue_final_message=True,
+                return_dict=True,
+                return_tensors="pt",
+            ),
+            self._device,
+        )
+        log_likelihoods = []
+        with torch.no_grad(), torch.autocast(self._device.type, dtype=self.DTYPE):
+            for label in labels:
+                answer_ids = torch.tensor(
+                    [
+                        self._model.tokenizer(
+                            label + "<|answer_end|>", add_special_tokens=False
+                        ).input_ids
+                    ],
+                    device=self._device,
+                )
+                logits = self._model.vlm(
+                    input_ids=torch.cat([prompt["input_ids"], answer_ids], dim=1),
+                    attention_mask=torch.cat(
+                        [prompt["attention_mask"], torch.ones_like(answer_ids)], dim=1
+                    ),
+                    pixel_values=prompt["pixel_values"],
+                    image_grid_thw=prompt["image_grid_thw"],
+                ).logits
+                # Logits at position p predict token p + 1.
+                n = answer_ids.shape[1]
+                log_probs = logits[0, -n - 1 : -1].float().log_softmax(dim=-1)
+                log_likelihoods.append(
+                    log_probs.gather(-1, answer_ids[0, :, None]).sum()
+                )
+        probabilities = torch.stack(log_likelihoods).softmax(dim=0).tolist()
+        return dict(zip(labels, probabilities, strict=True))

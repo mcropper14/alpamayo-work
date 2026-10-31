@@ -54,6 +54,12 @@ def latency_summary(arm_dir: Path, warmup: int) -> dict[str, float]:
         summary.update(
             {
                 "safety_ms_median": df["safety_ms"].median(),
+                # Overlaps model inference; absent in runs predating the overlap.
+                "safety_sense_ms_median": (
+                    df["safety_sense_ms"].median()
+                    if "safety_sense_ms" in df.columns
+                    else float("nan")
+                ),
                 "safety_speed_override_pct": 100.0
                 * (reason == "speed_override").mean(),
                 "safety_switched_candidate_pct": 100.0
@@ -62,6 +68,12 @@ def latency_summary(arm_dir: Path, warmup: int) -> dict[str, float]:
                 * (reason == "no_sensor_data").mean(),
             }
         )
+    # Weather-adaptive arms: how often each safety sensor mode was used.
+    if "sensor_mode" in df.columns:
+        for mode in ("none", "lidar", "radar", "fused"):
+            summary[f"sensor_mode_{mode}_pct"] = (
+                100.0 * (df["sensor_mode"] == mode).mean()
+            )
     # Visual feature cache counters (images requested / encoded / reused).
     for column in df.columns:
         if column.startswith("vision_") and column != "vision_encoder_ms":

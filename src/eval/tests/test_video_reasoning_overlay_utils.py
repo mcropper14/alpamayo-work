@@ -24,7 +24,10 @@ from eval.data import (
     Routes,
     SimulationResult,
 )
-from eval.video_reasoning_overlay_utils import _render_single_reasoning_overlay_frame
+from eval.video_reasoning_overlay_utils import (
+    _overlay_reasoning_on_frame,
+    _render_single_reasoning_overlay_frame,
+)
 
 
 def _make_renderable_trajectory(
@@ -106,3 +109,16 @@ def test_render_single_reasoning_overlay_frame_uses_renderable_trajectory_api() 
 
     assert frame.ndim == 3
     assert frame.shape[2] == 3
+
+
+def test_scene_labels_are_drawn_next_to_time_indicator() -> None:
+    frame = np.zeros((360, 1280, 3), dtype=np.uint8)
+    strip = (slice(10, 58), slice(200, 600))
+
+    plain = _overlay_reasoning_on_frame(frame, "", 1.0)
+    labelled = _overlay_reasoning_on_frame(
+        frame, "", 1.0, scene_label_text="Weather: rain · Scenario: intersection"
+    )
+
+    assert not plain[strip].any()
+    assert labelled[strip].any()

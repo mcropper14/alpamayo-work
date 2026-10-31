@@ -1,0 +1,21 @@
+# @package _global_
+# Weather-adaptive safety validator.
+#
+# The runtime forwards LiDAR and radar (as in safety_validator_radar); the
+# driver labels the scene weather with the driving model's own VQA answers
+# (alpasim_driver.scene_labels, Alpamayo 1.5 only) and picks the safety sensors per
+# label with driver.safety_validator.weather_sensor_policy.
+#
+# The simulated LiDAR and radar have no weather of their own: add
+# +exp/weather=dev_scenes (or set runtime.simulation_config.scene_weather)
+# to degrade them to match each scene's actual weather.
+#
+# Usage: uv run alpasim_wizard ... driver=alpamayo1_5 +exp/sim=safety_validator_weather
+
+defaults:
+  - safety_validator_radar
+  - _self_
+
+driver:
+  weather:
+    enabled: true

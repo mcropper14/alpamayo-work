@@ -409,6 +409,18 @@ class DriverResponseAtTime:
     command_name: str | None = None
     # Optional reasoning text from driver debug info.
     reasoning_text: str | None = None
+    # Scene labels from driver debug info (e.g. {"weather": "rain"}), plus the
+    # safety validator's sensor mode as "safety sensors" when it reports one.
+    scene_labels: dict[str, str] = dataclasses.field(default_factory=dict)
+
+    @property
+    def scene_label_text(self) -> str | None:
+        """One-line summary for video overlays, e.g. "Weather: rain · ..."."""
+        if not self.scene_labels:
+            return None
+        return " · ".join(
+            f"{name.capitalize()}: {label}" for name, label in self.scene_labels.items()
+        )
 
     @staticmethod
     def _extract_debug_extra(
@@ -528,6 +540,7 @@ class DriverResponseAtTime:
         safety_monitor_safe = None
         command_name = None
         reasoning_text = None
+        scene_labels: dict[str, str] = {}
         extra = DriverResponseAtTime._extract_debug_extra(
             driver_response,
             parse_unstructured_debug_info=parse_unstructured_debug_info,
@@ -539,6 +552,12 @@ class DriverResponseAtTime:
                 command_name = extra["command_name"]
             if "reasoning_text" in extra:
                 reasoning_text = extra["reasoning_text"]
+            if "scene_labels" in extra:
+                scene_labels.update(extra["scene_labels"])
+            if "sensor_mode" in extra.get("safety_validator", {}):
+                scene_labels["safety sensors"] = extra["safety_validator"][
+                    "sensor_mode"
+                ]
 
         # Selected trajectory
         selected_traj = RenderableTrajectory.from_grpc_with_aabb(
@@ -573,6 +592,7 @@ class DriverResponseAtTime:
             safety_monitor_safe=safety_monitor_safe,
             command_name=command_name,
             reasoning_text=reasoning_text,
+            scene_labels=scene_labels,
         )
 
 

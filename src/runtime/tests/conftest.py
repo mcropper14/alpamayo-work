@@ -182,6 +182,7 @@ def mock_unbound(simple_trajectory: Trajectory) -> MagicMock:
     unbound.send_recording_ground_truth = False
     unbound.render_bundling = RenderBundling.NONE
     unbound.render_lidar_for_driver = False
+    unbound.weather_effects = None
     unbound.rig_to_lidar = None
     unbound.radars = []
     unbound.session_seed = 0

@@ -379,6 +379,10 @@ class SimulationConfig:
     # Radars simulated from ground-truth traffic, one scan per LiDAR/camera
     # render, forwarded with the LiDAR spin.  Empty disables radar.
     radars: list[RadarConfig] = field(default_factory=list)
+    # Actual weather per scene ID (clear, rain, fog or snow), degrading the
+    # forwarded LiDAR and radar to match what the recorded cameras show; see
+    # ``alpasim_runtime.sensor_weather``.  Unlisted scenes are not degraded.
+    scene_weather: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

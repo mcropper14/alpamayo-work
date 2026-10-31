@@ -167,6 +167,35 @@ class SafetyValidatorConfig:
     # Radar fusion (``runtime.simulation_config.radars``); see radar_fusion.
     radar_association_gate_m: float = 2.0  # radar <-> LiDAR obstacle distance
     radar_only_confidence: float = 0.5  # obstacles no LiDAR detection explains
+    # Safety sensors per weather label, used when ``weather.enabled``: one of
+    # none (skip the check), lidar, radar or fused.  ``unknown`` applies until
+    # the first weather query.  Without weather labeling every forwarded sensor
+    # is used.
+    weather_sensor_policy: dict[str, str] = field(
+        default_factory=lambda: {
+            "unknown": "fused",
+            "clear": "none",
+            "rain": "fused",
+            "fog": "radar",
+            "snow": "radar",
+        }
+    )
+
+
+@dataclass
+class SceneLabelConfig:
+    """One scene label (weather or scenario) from the model's own VQA answers.
+
+    The model scores each answer to the label's question about the latest
+    frame of ``camera``; the session's label is the most frequent of the last
+    ``history`` answers.  See ``alpasim_driver.scene_labels``.
+    """
+
+    enabled: bool = False
+    camera: str = "camera_front_wide_120fov"
+    # Simulation time between queries; each costs one short model call.
+    query_interval_s: float = 2.0
+    history: int = 3
 
 
 @dataclass
@@ -212,6 +241,11 @@ class DriverConfig:
     safety_validator: SafetyValidatorConfig = field(
         default_factory=SafetyValidatorConfig
     )
+
+    # Weather picks the safety sensors (safety_validator.weather_sensor_policy);
+    # the scenario label is logged and shown in videos.
+    weather: SceneLabelConfig = field(default_factory=SceneLabelConfig)
+    scenario: SceneLabelConfig = field(default_factory=SceneLabelConfig)
 
     # Output configuration
     output_dir: str = MISSING

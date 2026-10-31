@@ -69,6 +69,7 @@ from .latency import (
 from .models import DriveCommand
 from .models.base import (
     BaseTrajectoryModel,
+    CameraFrame,
     CameraImages,
     ModelInputValidationError,
     ModelPrediction,
@@ -81,8 +82,21 @@ from .rectification import (
     FthetaToPinholeRectifier,
     build_ftheta_rectifier_for_resolution,
 )
-from .safety_filter import SafetyFilter
-from .schema import DriverConfig, ModelConfig, RectificationTargetConfig
+from .safety_filter import SafetyFilter, SensedObstacles
+from .scene_labels import (
+    SCENARIO,
+    WEATHER,
+    LabelEstimate,
+    LabelTask,
+    SensorMode,
+    parse_sensor_policy,
+)
+from .schema import (
+    DriverConfig,
+    ModelConfig,
+    RectificationTargetConfig,
+    SceneLabelConfig,
+)
 from .trajectory_optimizer import (
     TrajectoryOptimizer,
     VehicleConstraints,
@@ -212,6 +226,8 @@ class Session:
     frames_trail_request_warned: bool = False
     # Set when ``safety_validator.enabled``.
     safety_filter: SafetyFilter | None = None
+    # Enabled scene labels by task name; updated by the inference worker.
+    scene_labels: dict[str, LabelEstimate] = field(default_factory=dict)
 
     @staticmethod
     def create(
@@ -540,6 +556,24 @@ class EgoDriverService(EgodriverServiceServicer):
                 "image_decode_device=cuda"
             )
 
+        self._label_tasks: list[tuple[LabelTask, SceneLabelConfig]] = [
+            (task, task_cfg)
+            for task, task_cfg in ((WEATHER, cfg.weather), (SCENARIO, cfg.scenario))
+            if task_cfg.enabled
+        ]
+        for task, task_cfg in self._label_tasks:
+            if task_cfg.camera not in self._model.camera_ids:
+                raise ValueError(
+                    f"{task.name}.camera {task_cfg.camera} is not one of the "
+                    f"model's cameras {self._model.camera_ids}"
+                )
+        # Weather labels pick the safety sensors through this policy.
+        self._sensor_policy: dict[str, SensorMode] | None = (
+            parse_sensor_policy(cfg.safety_validator.weather_sensor_policy)
+            if cfg.weather.enabled and cfg.safety_validator.enabled
+            else None
+        )
+
         # Get context length from model or config override
         self._context_length = (
             cfg.inference.context_length
@@ -814,7 +848,36 @@ class EgoDriverService(EgodriverServiceServicer):
             # can keep its trajectory choice consistent across planning cycles.
             job.session.last_selected_plan = prediction.selected_plan
 
+        for job in batch:
+            for task, task_cfg in self._label_tasks:
+                estimate = job.session.scene_labels[task.name]
+                if estimate.query_due(job.timestamp_us):
+                    self._query_label(job, task, task_cfg.camera, estimate)
+
         return predictions
+
+    def _query_label(
+        self, job: DriveJob, task: LabelTask, camera: str, estimate: LabelEstimate
+    ) -> None:
+        """Ask the model the task's question about the camera's latest frame."""
+        (frame,) = job.session.frame_caches[camera].latest_frame_entries(1)
+        start = synchronized_now(self._device)
+        probabilities = self._model.classify(
+            camera,
+            CameraFrame(frame.timestamp_us, frame.image),
+            task.question,
+            task.labels,
+        )
+        estimate.update(job.timestamp_us, probabilities)
+        job.timings[f"{task.name}_label_ms"] = (
+            synchronized_now(self._device) - start
+        ) * 1e3
+        logger.info(
+            "Scene %s: %s (answer probabilities %s)",
+            task.name,
+            estimate.label,
+            {k: round(v, 3) for k, v in probabilities.items()},
+        )
 
     def _save_nonfinite_inputs(
         self, batch: list[DriveJob], inputs: list[PredictionInput]
@@ -909,6 +972,10 @@ class EgoDriverService(EgodriverServiceServicer):
                 session.safety_filter = SafetyFilter(
                     self._cfg.safety_validator, self._model.output_frequency_hz
                 )
+            session.scene_labels = {
+                task.name: LabelEstimate(task_cfg)
+                for task, task_cfg in self._label_tasks
+            }
             self._sessions[request.session_uuid] = session
 
         return SessionRequestStatus()
@@ -1088,6 +1155,22 @@ class EgoDriverService(EgodriverServiceServicer):
                 raise RuntimeError("Driver inference worker is stopping")
             self._job_queue.put_nowait(job)
 
+        # Sensing needs only this request's sensor data, so it runs on this
+        # otherwise idle thread while the worker runs the model.
+        sensed: SensedObstacles | None = None
+        safety_log: dict = {}
+        if session.safety_filter is not None:
+            speed, _ = self._get_speed_and_acceleration(session)
+            mode = (
+                self._sensor_policy[session.scene_labels[WEATHER.name].label]
+                if self._sensor_policy is not None
+                else SensorMode.FUSED
+            )
+            sense_start = time.perf_counter()
+            sensed = session.safety_filter.sense(request.renderer_data, speed, mode)
+            safety_log["safety_sense_ms"] = (time.perf_counter() - sense_start) * 1e3
+            safety_log["sensor_mode"] = str(mode)
+
         try:
             prediction = future.result()
         except ModelInputValidationError as exc:
@@ -1097,15 +1180,14 @@ class EgoDriverService(EgodriverServiceServicer):
             raise
 
         safety_debug: dict | None = None
-        safety_log: dict = {}
         if session.safety_filter is not None:
-            speed, _ = self._get_speed_and_acceleration(session)
             safety_start = time.perf_counter()
             model_index = prediction.selected_index
             prediction, safety_debug = session.safety_filter.apply(
-                prediction, request.renderer_data, speed
+                prediction, sensed, speed
             )
-            safety_log = {
+            safety_log |= {
+                # Only the part after inference; sensing overlapped the model.
                 "safety_ms": (time.perf_counter() - safety_start) * 1e3,
                 "safety_reason": safety_debug["reason"],
                 "safety_switched_candidate": prediction.selected_index != model_index,
@@ -1131,6 +1213,15 @@ class EgoDriverService(EgodriverServiceServicer):
         }
         if safety_debug is not None:
             debug_data["safety_validator"] = safety_debug
+        if session.scene_labels:
+            # Shown in eval videos.
+            debug_data["scene_labels"] = {
+                name: estimate.label for name, estimate in session.scene_labels.items()
+            }
+            debug_data["scene_label_probabilities"] = {
+                name: estimate.last_probabilities
+                for name, estimate in session.scene_labels.items()
+            }
         debug_info = DriveResponse.DebugInfo(
             unstructured_debug_info=pickle.dumps(debug_data),
             sampled_trajectories=self._sampled_alpasim_trajectories(
@@ -1147,6 +1238,10 @@ class EgoDriverService(EgodriverServiceServicer):
                 "rpc_ms": (time.perf_counter() - rpc_start) * 1e3,
                 **job.timings,
                 **safety_log,
+                **{
+                    f"{name}_label": estimate.label
+                    for name, estimate in session.scene_labels.items()
+                },
                 **gpu_memory_gib(self._device),
             }
         )

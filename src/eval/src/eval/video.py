@@ -17,7 +17,12 @@ from tqdm import tqdm
 
 from eval.aggregation import processing
 from eval.aggregation.processing import ProcessedMetricDFs
-from eval.data import CameraProjector, ScenarioEvalInput, SimulationResult
+from eval.data import (
+    CameraProjector,
+    DriverResponseAtTime,
+    ScenarioEvalInput,
+    SimulationResult,
+)
 from eval.schema import EvalConfig, MapElements, VideoLayout
 from eval.video_data import ShapelyMap
 from eval.video_reasoning_overlay_utils import render_reasoning_overlay_style_video
@@ -28,6 +33,18 @@ mpl.use("Agg")
 mplstyle.use("fast")
 
 VIDEO_FILE_NAME_FORMAT = "{clipgt_id}_{rollout_id}_{camera_id}_{layout_id}.mp4"
+
+
+def _driver_status_text(driver_response: DriverResponseAtTime | None) -> str | None:
+    """Command and scene labels for the camera overlay, one per line."""
+    if driver_response is None:
+        return None
+    lines = []
+    if driver_response.command_name:
+        lines.append(f"Command: {driver_response.command_name}")
+    if driver_response.scene_label_text:
+        lines.append(driver_response.scene_label_text)
+    return "\n".join(lines) or None
 
 
 def render_and_save_video(
@@ -502,19 +519,16 @@ def create_video_animation(
         fontsize=6,
     )
 
-    # Get initial command name from driver response
-    initial_driver_response = sim_result.driver_responses.get_driver_response_for_time(
-        timestamps_us[0], which_time="now", fallback="previous"
-    )
-    initial_command = (
-        initial_driver_response.command_name
-        if initial_driver_response and initial_driver_response.command_name
-        else None
+    # Command and scene labels from the driver response
+    initial_status = _driver_status_text(
+        sim_result.driver_responses.get_driver_response_for_time(
+            timestamps_us[0], which_time="now", fallback="previous"
+        )
     )
     command_text_artist = axs["image"].text(
         0.02,
         0.98,
-        f"Command: {initial_command}" if initial_command else "",
+        initial_status or "",
         ha="left",
         va="top",
         transform=axs["image"].transAxes,
@@ -522,7 +536,7 @@ def create_video_animation(
         color="white",
         fontweight="bold",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.7),
-        visible=initial_command is not None,
+        visible=initial_status is not None,
     )
 
     ego_transform = get_ego_transform(
@@ -715,17 +729,13 @@ def create_video_animation(
 
         text_artist.set_text(f"Time: {time}")
 
-        # Update command text from driver response
+        # Update command and scene label text from driver response
         driver_response = sim_result.driver_responses.get_driver_response_for_time(
             time, which_time="now", fallback="previous"
         )
-        command_name = (
-            driver_response.command_name
-            if driver_response and driver_response.command_name
-            else None
-        )
-        if command_name:
-            command_text_artist.set_text(f"Command: {command_name}")
+        status = _driver_status_text(driver_response)
+        if status:
+            command_text_artist.set_text(status)
             command_text_artist.set_visible(True)
         else:
             command_text_artist.set_visible(False)

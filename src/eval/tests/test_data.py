@@ -16,6 +16,7 @@ from alpasim_utils.geometry import Pose, Trajectory
 
 from eval import data as eval_data
 from eval.data import RAABB, DriverResponseAtTime, DriverResponses, RenderableTrajectory
+from eval.video import _driver_status_text
 
 
 @pytest.fixture
@@ -412,3 +413,50 @@ class TestDriverResponseDebugInfo:
 
         assert parsed.command_name is None
         assert parsed.reasoning_text is None
+
+    def test_scene_labels_and_safety_sensors_form_overlay_text(
+        self, sample_raabb: RAABB
+    ) -> None:
+        response = _drive_response_with_debug(
+            eval_data.pickle.dumps(
+                {
+                    "command_name": "STRAIGHT",
+                    "scene_labels": {"weather": "rain", "scenario": "intersection"},
+                    "safety_validator": {"reason": "safe", "sensor_mode": "fused"},
+                }
+            )
+        )
+
+        parsed = DriverResponseAtTime.from_drive_response(
+            response,
+            now_time_us=0,
+            query_time_us=100_000,
+            ego_raabb=sample_raabb,
+            ego_coords_rig_to_aabb_center=Pose.identity(),
+            parse_unstructured_debug_info=True,
+        )
+
+        assert parsed.scene_label_text == (
+            "Weather: rain · Scenario: intersection · Safety sensors: fused"
+        )
+        assert _driver_status_text(parsed) == (
+            "Command: STRAIGHT\n"
+            "Weather: rain · Scenario: intersection · Safety sensors: fused"
+        )
+
+    def test_no_scene_labels_means_no_overlay_text(self, sample_raabb: RAABB) -> None:
+        response = _drive_response_with_debug(
+            eval_data.pickle.dumps({"command_name": "LEFT"})
+        )
+
+        parsed = DriverResponseAtTime.from_drive_response(
+            response,
+            now_time_us=0,
+            query_time_us=100_000,
+            ego_raabb=sample_raabb,
+            ego_coords_rig_to_aabb_center=Pose.identity(),
+            parse_unstructured_debug_info=True,
+        )
+
+        assert parsed.scene_label_text is None
+        assert _driver_status_text(parsed) == "Command: LEFT"

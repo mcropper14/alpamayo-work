@@ -1,0 +1,15 @@
+# @package _global_
+# VQA scenario labels (lane following, intersection, construction zone,
+# pedestrians nearby, lane change) from the driving model's own answers about
+# the front camera; see alpasim_driver.scene_labels.  Alpamayo 1.5 only.
+#
+# Labels are logged (scenario_label in driver/latency.jsonl) and shown in the
+# eval videos; they do not change driving.  Each query costs one short model
+# call every query_interval_s of simulation time (scenario_label_ms).
+#
+# Usage: uv run alpasim_wizard ... driver=alpamayo1_5 +exp/labels=scenario
+# Same as: driver.scenario.enabled=true
+
+driver:
+  scenario:
+    enabled: true

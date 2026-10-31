@@ -1,0 +1,24 @@
+# @package _global_
+# Actual weather of the benchmark dev scenes (benchmark/scenes_dev.txt),
+# hand-labelled from the recorded front camera.  The runtime degrades the
+# forwarded LiDAR and radar to match (alpasim_runtime.sensor_weather); scenes
+# not listed are left as rendered.
+#
+# All 8 are daytime.  The two "rain" scenes show a wet road under heavy
+# overcast; whether it is still raining is not visible.  7cd29a50 is overcast
+# and hazy but not foggy, so it is labelled clear.  No dev scene shows fog or
+# snow.
+#
+# Usage: uv run alpasim_wizard ... +exp/weather=dev_scenes
+
+runtime:
+  simulation_config:
+    scene_weather:
+      clipgt-518b91d7-c8d7-4863-92b8-c59caa8128ad: clear
+      clipgt-61106668-1a33-4ca1-9e64-4041381a37f4: rain
+      clipgt-5c1b7555-64fa-4ae4-98bf-4cf24e6de0a4: rain
+      clipgt-0499fb41-122d-4180-83af-f954a9974d3b: clear
+      clipgt-7cd29a50-39b9-40d3-8ab5-d75a7efe7bc1: clear
+      clipgt-060131e7-ee72-477c-89da-083e0b446566: clear
+      clipgt-d9c2a88b-dd8c-479a-bb23-1e6479315f29: clear
+      clipgt-d68c7161-bef6-4342-800f-607127417825: clear

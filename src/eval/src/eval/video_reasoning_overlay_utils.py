@@ -47,13 +47,14 @@ def _wrap_text(text: str, max_chars_per_line: int = 50) -> str:
     return "\n".join(lines)
 
 
-def _overlay_reasoning_on_frame(frame, reasoning_text, time_s):
+def _overlay_reasoning_on_frame(frame, reasoning_text, time_s, scene_label_text=None):
     """Overlay reasoning text on a video frame.
 
     Args:
         frame: numpy array (H, W, 3) uint8
         reasoning_text: The chain-of-thought reasoning text
         time_s: Current time in seconds
+        scene_label_text: Optional scene labels, shown next to the time
 
     Returns:
         numpy array with text overlay (H, W, 3)
@@ -87,6 +88,16 @@ def _overlay_reasoning_on_frame(frame, reasoning_text, time_s):
     time_text = f"t = {time_s:.1f}s"
     overlay_draw.rectangle([(10, 10), (190, 58)], fill=(0, 0, 0, 200))
     overlay_draw.text((20, 12), time_text, fill=(255, 255, 255), font=time_font)
+
+    # Scene labels to the right of the time indicator
+    if scene_label_text:
+        right = 210 + overlay_draw.textlength(scene_label_text, font=time_font) + 20
+        overlay_draw.rectangle(
+            [(200, 10), (min(right, w - 10), 58)], fill=(0, 0, 0, 200)
+        )
+        overlay_draw.text(
+            (210, 12), scene_label_text, fill=(255, 214, 102), font=time_font
+        )
 
     # Reasoning text - prominent display at TOP of frame (below time indicator)
     if reasoning_text:
@@ -423,14 +434,17 @@ def _render_single_reasoning_overlay_frame(
     # Get camera frame
     camera_frame = _get_camera_frame_numpy(camera, time_us_int)
 
-    # Create left pane: camera with reasoning overlay
-    left_frame = _overlay_reasoning_on_frame(
-        camera_frame, cached_reasoning, display_time_s
-    )
-
-    # Get trajectory data at this timestamp
+    # Get trajectory data and scene labels at this timestamp
     driver_response_at_time = driver_responses.get_driver_response_for_time(
         time_us_int, which_time="now"
+    )
+
+    # Create left pane: camera with reasoning overlay
+    left_frame = _overlay_reasoning_on_frame(
+        camera_frame,
+        cached_reasoning,
+        display_time_s,
+        driver_response_at_time.scene_label_text if driver_response_at_time else None,
     )
 
     # Create right pane: trajectory chart

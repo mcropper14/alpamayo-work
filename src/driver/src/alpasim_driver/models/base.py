@@ -336,6 +336,22 @@ class BaseTrajectoryModel(ABC):
             self.predict(prediction_input) for prediction_input in prediction_inputs
         ]
 
+    def classify(
+        self,
+        camera_id: str,
+        frame: CameraFrame,
+        question: str,
+        labels: tuple[str, ...],
+    ) -> dict[str, float]:
+        """Probability of each of ``labels`` as the answer to ``question``
+        about ``frame``.
+
+        Used by the driver's scene labels (``alpasim_driver.scene_labels``).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support scene labeling"
+        )
+
     @property
     @abstractmethod
     def camera_ids(self) -> list[str]:

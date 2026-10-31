@@ -17,6 +17,7 @@ from alpasim_runtime.events.base import Event, EventPriority, EventQueue
 from alpasim_runtime.events.state import RolloutState
 from alpasim_runtime.force_gt_frame_cache import ForceGtFrameKey
 from alpasim_runtime.radar import simulate_radar_scan
+from alpasim_runtime.sensor_weather import degrade_lidar_payload, degrade_radar
 from alpasim_runtime.services.driver_service import DriverService
 from alpasim_runtime.services.sensorsim_service import SensorsimService
 from alpasim_runtime.types import Clock, RuntimeCamera
@@ -27,6 +28,11 @@ from alpasim_utils.sensor_payload import pack_sensor_payloads
 from alpasim_utils.types import ImageWithMetadata
 
 logger = logging.getLogger(__name__)
+
+# Separate random streams for weather effects, so they never reuse the radar
+# model's own draws.
+_LIDAR_STREAM = 1
+_RADAR_STREAM = 2
 
 
 def _force_gt_cache_key(
@@ -98,6 +104,14 @@ async def _render_frames(
                 rig_to_lidar=rig_to_lidar,
             ),
         )
+        if unbound.weather_effects is not None:
+            lidar_payload = degrade_lidar_payload(
+                lidar_payload,
+                unbound.weather_effects,
+                np.random.default_rng(
+                    [unbound.session_seed, trigger.time_range_us.stop, _LIDAR_STREAM]
+                ),
+            )
         payloads.append(lidar_payload)
     else:
         images, renderer_driver_data = await _render_camera_frames(
@@ -125,6 +139,12 @@ async def _render_frames(
             time_us,
             np.random.default_rng([unbound.session_seed, time_us]),
         )
+        if unbound.weather_effects is not None:
+            scan = degrade_radar(
+                scan,
+                unbound.weather_effects,
+                np.random.default_rng([unbound.session_seed, time_us, _RADAR_STREAM]),
+            )
         payloads.append(pack_radar_scan(scan))
     return images, pack_sensor_payloads(payloads)
 

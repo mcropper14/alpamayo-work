@@ -27,6 +27,14 @@ declare -A ARM_OVERRIDES=(
   [alpamayo1_5_safety_fused]="driver=alpamayo1_5 +exp/presets=alpamayo1_5_comparison_4cam +exp/sim=safety_validator_radar driver.model.num_trajectory_samples=6"
   # VaVAM gives one candidate, so the validator can only slow it down.
   [vavam_safety_fused]="driver=vavam +exp/sim=safety_validator_radar"
+  # Weather arms: LiDAR and radar degraded to each dev scene's actual weather
+  # (exp/weather/dev_scenes.yaml).  Fixed-sensor arms vs. the adaptive policy.
+  [alpamayo1_5_safety_lidar_weather]="driver=alpamayo1_5 +exp/presets=alpamayo1_5_comparison_4cam +exp/sim=safety_validator +exp/weather=dev_scenes driver.model.num_trajectory_samples=6"
+  [alpamayo1_5_safety_fused_weather]="driver=alpamayo1_5 +exp/presets=alpamayo1_5_comparison_4cam +exp/sim=safety_validator_radar +exp/weather=dev_scenes driver.model.num_trajectory_samples=6"
+  # Scenario labels only (logged and in videos; driving unchanged), to measure
+  # their distribution and query cost against alpamayo1_5.
+  [alpamayo1_5_scenario_labels]="driver=alpamayo1_5 +exp/presets=alpamayo1_5_comparison_4cam +exp/labels=scenario"
+  [alpamayo1_5_safety_adaptive_weather]="driver=alpamayo1_5 +exp/presets=alpamayo1_5_comparison_4cam +exp/sim=safety_validator_weather +exp/weather=dev_scenes driver.model.num_trajectory_samples=6"
 )
 N_ROLLOUTS=${N_ROLLOUTS:-3}
 # Where prepared arms live; benchmark/summarize.py reads benchmark/runs.

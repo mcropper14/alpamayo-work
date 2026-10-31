@@ -31,6 +31,7 @@ from .lidar_obstacle_extractor import LidarObstacleExtractor
 from .models.base import ModelPrediction
 from .radar_fusion import fuse_radar
 from .safety_validator import SafetyValidator
+from .scene_labels import SensorMode
 from .schema import SafetyValidatorConfig
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,15 @@ def _scale_to_speed(
     return positions * min(target_speed / implied_speed, 1.0)
 
 
+@dataclasses.dataclass(frozen=True)
+class SensedObstacles:
+    """Rig-frame obstacles for one step, plus per-sensor debug counts."""
+
+    mode: SensorMode
+    obstacles: list[dict[str, Any]]
+    debug: dict[str, Any]
+
+
 class SafetyFilter:
     """Per-session state: the LiDAR tracker and the validator's hold-stop latch."""
 
@@ -89,17 +99,38 @@ class SafetyFilter:
             rear_prediction_horizon=cfg.rear_prediction_horizon,
         )
 
-    def apply(
-        self, prediction: ModelPrediction, renderer_data: bytes, speed: float
-    ) -> tuple[ModelPrediction, dict[str, Any]]:
-        """Return the prediction to drive and a debug summary of the decision."""
+    def sense(
+        self, renderer_data: bytes, speed: float, mode: SensorMode
+    ) -> SensedObstacles | None:
+        """Obstacles from the sensors ``mode`` selects; None when none arrived.
+
+        Independent of the model's prediction, so the driver runs it while the
+        model infers.  Calls must stay in step order: the LiDAR tracker
+        associates each spin with the previous one.
+        """
+        if mode is SensorMode.NONE:
+            return SensedObstacles(mode=mode, obstacles=[], debug={})
         if not renderer_data:
             # The runtime forwards sensor data once per camera render; drive
             # calls that outnumber renders (or force-GT cache replays) carry none.
             logger.warning("Safety validator enabled but no sensor data received")
-            return prediction, {"reason": "no_sensor_data"}
+            return None
+        obstacles, debug = self._obstacles(renderer_data, speed, mode)
+        return SensedObstacles(mode=mode, obstacles=obstacles, debug=debug)
 
-        obstacles, sensor_debug = self._obstacles(renderer_data, speed)
+    def apply(
+        self,
+        prediction: ModelPrediction,
+        sensed: SensedObstacles | None,
+        speed: float,
+    ) -> tuple[ModelPrediction, dict[str, Any]]:
+        """Return the prediction to drive and a debug summary of the decision."""
+        if sensed is None:
+            return prediction, {"reason": "no_sensor_data"}
+        if sensed.mode is SensorMode.NONE:
+            return prediction, {"reason": "sensors_off", "sensor_mode": "none"}
+
+        obstacles, sensor_debug = sensed.obstacles, sensed.debug
         ego_state = {"x": 0.0, "y": 0.0, "heading": 0.0, "speed": speed}
 
         k = len(prediction.candidate_positions)
@@ -158,17 +189,33 @@ class SafetyFilter:
         }
 
     def _obstacles(
-        self, renderer_data: bytes, speed: float
+        self, renderer_data: bytes, speed: float, mode: SensorMode
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        """Rig-frame obstacles from the forwarded sensors, plus debug counts."""
+        """Rig-frame obstacles from the selected sensors, plus debug counts.
+
+        FUSED uses whichever sensors were forwarded; LIDAR and RADAR require
+        that sensor, since the runtime must forward what the policy selects.
+        """
         payloads = unpack_sensor_payloads(renderer_data)
+        if mode is SensorMode.FUSED:
+            use_lidar = lidar_payload.MAGIC in payloads
+            use_radar = radar_payload.MAGIC in payloads
+        else:
+            use_lidar = mode is SensorMode.LIDAR
+            use_radar = mode is SensorMode.RADAR
+            required = lidar_payload.MAGIC if use_lidar else radar_payload.MAGIC
+            if required not in payloads:
+                raise ValueError(
+                    f"Safety sensor mode {mode} needs {required.decode()} data, "
+                    "which the runtime did not forward"
+                )
         obstacles: list[dict[str, Any]] = []
-        debug: dict[str, Any] = {}
-        if lidar_payload.MAGIC in payloads:
+        debug: dict[str, Any] = {"sensor_mode": str(mode)}
+        if use_lidar:
             spin = lidar_payload.unpack_lidar_spin(payloads[lidar_payload.MAGIC])
             obstacles = self._extractor.extract(spin, speed)
             debug["num_lidar_obstacles"] = len(obstacles)
-        if radar_payload.MAGIC in payloads:
+        if use_radar:
             scan = radar_payload.unpack_radar_scan(payloads[radar_payload.MAGIC])
             obstacles = fuse_radar(
                 obstacles,

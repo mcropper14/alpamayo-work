@@ -10,7 +10,7 @@ from typing import cast
 
 import numpy as np
 import pytest
-from alpasim_grpc.v0.common_pb2 import PoseAtTime
+from alpasim_grpc.v0.common_pb2 import DynamicState, PoseAtTime
 from alpasim_grpc.v0.egodriver_pb2 import DriveRequest, RolloutCameraImage
 from alpasim_grpc.v0.egodriver_pb2_grpc import (
     EgodriverServiceStub,
@@ -22,7 +22,8 @@ import grpc
 
 from ..main import DriveJob, EgoDriverService, Session
 from ..models import DriveCommand
-from ..models.base import BaseTrajectoryModel
+from ..models.base import BaseTrajectoryModel, ModelPrediction
+from ..scene_labels import SensorMode
 from ..schema import DriverConfig
 
 
@@ -127,3 +128,50 @@ def test_drive_rejects_work_after_worker_starts_stopping() -> None:
         service.drive(DriveRequest(session_uuid="session"), None)
 
     assert service._job_queue.empty()
+
+
+class _SafetyRun(Exception):
+    """Ends drive() once the safety filter has judged the prediction."""
+
+
+class _RecordingSafetyFilter:
+    def __init__(self) -> None:
+        self.sensed = threading.Event()
+
+    def sense(self, renderer_data: bytes, speed: float, mode: SensorMode) -> str:
+        self.sensed.set()
+        return "obstacles"
+
+    def apply(self, prediction: object, sensed: str, speed: float) -> None:
+        assert sensed == "obstacles"
+        raise _SafetyRun
+
+
+class _SafetySession(_ReadySession):
+    def __init__(self) -> None:
+        self.safety_filter = _RecordingSafetyFilter()
+        self.dynamic_states = [(0, DynamicState())]
+
+
+def test_drive_senses_obstacles_while_model_infers() -> None:
+    service = EgoDriverService.__new__(EgoDriverService)
+    session = _SafetySession()
+    service._sessions = {"session": cast(Session, session)}
+    service._worker_lifecycle_lock = threading.Lock()
+    service._worker_stop = threading.Event()
+    service._job_queue = queue.Queue[DriveJob | object]()
+    service._sensor_policy = None
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        drive = executor.submit(
+            service.drive, DriveRequest(session_uuid="session"), None
+        )
+        # Play the inference worker: hold the job until sensing has happened.
+        job = service._job_queue.get(timeout=5)
+        assert isinstance(job, DriveJob)
+        assert session.safety_filter.sensed.wait(timeout=5)
+        assert not job.result.done()
+        job.result.set_result(cast(ModelPrediction, SimpleNamespace(selected_index=0)))
+
+        with pytest.raises(_SafetyRun):
+            drive.result(timeout=5)

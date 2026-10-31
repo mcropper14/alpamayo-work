@@ -52,3 +52,15 @@ bash benchmark/prepare.sh alpamayo1_5_vcache_neardup              # login node, 
 The microbenchmark (visual_cache_microbench.py) loads the real Alpamayo 1.5 encoder. It reports encoder time with and without the cache, images encoded per step, and the largest difference between cached and uncached features. That difference should be only bf16 rounding noise, since GPU kernels can round slightly differently at different batch sizes. It uses random frames, which doesn't matter for exact reuse, so near-duplicate reuse is evaluated in the closed-loop runs.
 
 Expect a modest end-to-end gain. The cache removes only vision-encoder work. FlashDrive's measurements put the encoder at about 87 of 717 ms for Alpamayo 1.5. The language model still processes every visual token during prefill. Reusing that prefill work for unchanged frames would be the larger next gain, but that's the part that overlaps most with FlashDrive's streaming inference. I've noted this in TODO.md, along with how to run the cache-size and update-strategy ablations as extra benchmark runs.
+
+
+After the GPU worker finishes a normal driving inference, it checks whether a weather query is due (main.py:841). The trigger is simulation time: the first step of a rollout, then every query_interval_s (default 2 s) after that (weather.py:49). At 10 Hz that's about once every 20 steps, not every step.
+
+The query runs on the same worker thread as driving, because both use the one model on the GPU. It adds weather_ms to that step's latency entry.
+
+system:    You are a driving assistant that generates safe and accurate actions.
+user:      [front camera, frame 1] <image>
+           <|question_start|>What is the weather in this scene?
+           Answer with one word: clear, rain, fog, snow.<|question_end|>
+assistant: <|answer_start|>
+

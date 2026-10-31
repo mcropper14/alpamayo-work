@@ -22,6 +22,7 @@ from alpasim_runtime.config import (
     VehicleConfig,
 )
 from alpasim_runtime.errors import InvalidSceneError
+from alpasim_runtime.sensor_weather import WEATHER_EFFECTS, WeatherEffects
 from alpasim_runtime.services.renderer import RendererService
 from alpasim_runtime.services.sensorsim_service import ImageFormat
 from alpasim_utils.geometry import Pose, Trajectory
@@ -234,6 +235,8 @@ class UnboundRollout:
     # Set iff ``render_lidar_for_driver``.
     rig_to_lidar: Pose | None = None
     radars: list[RadarConfig] = field(default_factory=list)
+    # Degradation of the forwarded sensors for the scene's weather.
+    weather_effects: WeatherEffects | None = None
 
     # Session seed shared by this rollout's driver and traffic sessions;
     # 0 ⇒ each service picks a random one (today's behaviour).
@@ -401,6 +404,11 @@ class UnboundRollout:
                 else None
             ),
             radars=list(simulation_config.radars),
+            weather_effects=(
+                WEATHER_EFFECTS[simulation_config.scene_weather[scene_id]]
+                if scene_id in simulation_config.scene_weather
+                else None
+            ),
         )
 
     def get_log_metadata(self) -> RolloutMetadata.SessionMetadata:
