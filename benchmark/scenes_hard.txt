@@ -1,0 +1,21 @@
+# 20 highest front_risk LiDAR scenes of benchmark/scene_screen.csv
+clipgt-096988dd-9367-4fdf-84f9-5a73c5061c6e
+clipgt-0d1fcd2c-ed47-4c72-b756-8e24bce0b9f4
+clipgt-1bc5e591-0f30-4d73-a7e9-fa04fa160530
+clipgt-1d0d601f-bba0-423a-8f3f-8942bb529fd7
+clipgt-23b03b84-fb88-445a-9a85-e19bad0a4986
+clipgt-4ebbe43e-5d3c-4689-ba5a-521947231b77
+clipgt-4ecc114d-4c76-49bb-874c-601561d738bb
+clipgt-5ebe79fa-04ce-4105-8fe8-f4ff15fd8d44
+clipgt-6023999c-cab4-4e04-92e6-722284a0065b
+clipgt-616e5804-5b6f-4bc3-8a0f-c1fa0d37423d
+clipgt-6250146a-7f9f-4508-851e-e25b7d9dc36a
+clipgt-76c2bb81-6435-44e9-859a-2033ca05173b
+clipgt-7ae6bec8-ccf1-4397-9180-83164840fbae
+clipgt-852f57f7-669e-4372-9851-ee55ce9c9f74
+clipgt-96afa4f7-099a-4b05-8763-0bf6b4e1c1b3
+clipgt-ba99f59f-f448-4b00-989f-da12982d2571
+clipgt-d1fca92f-9c5d-437a-aab2-e0bf237ef573
+clipgt-f803b3e3-2c70-43af-80e0-44fef67f207a
+clipgt-fdfb5073-c9e6-4da2-93b7-988273da3807
+clipgt-fea4c0bf-4020-415e-ab89-6b0b24f9add9
